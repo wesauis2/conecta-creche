@@ -28,4 +28,11 @@ git status --short   # deve estar vazio
 
 ## Promoção de admin (esta semana)
 
-Alteração manual no console Firestore: editar `users/{uid}` e definir `role` (ex.: `gestao`). Sem automação de allowlist nesta fase.
+Promoção de papéis é **manual** no console Firestore — não há allowlist nem seed automático nesta fase.
+
+1. Abra [Firebase Console](https://console.firebase.google.com/) → seu projeto → **Firestore Database** → **Dados**.
+2. Localize ou crie o documento `users/{uid}` (o `uid` aparece na tela de sessão após o primeiro login Google).
+3. Edite o campo `role` para um dos valores válidos: `admin`, `gestao`, `cuidador`, `responsavel` ou `convidado` (padrão no primeiro login).
+4. Para liberar um colega como administrador da equipe, defina `role: admin` no documento dele **uma vez**; logins seguintes do app **não** sobrescrevem um papel já promovido.
+
+Deploy das regras que protegem esses documentos: [`docs/firestore-rules.md`](firestore-rules.md).
