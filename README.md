@@ -23,3 +23,13 @@ flutter run
 ```
 
 Requisitos: Flutter SDK compatível com `sdk: ^3.12.2` em `pubspec.yaml`.
+
+## Firestore
+
+Após o primeiro login Google, o app grava `users/{uid}` no Firestore. Publique as regras de segurança do repositório:
+
+```bash
+firebase deploy --only firestore:rules
+```
+
+Passo a passo completo, simulador de negação entre usuários e promoção manual de papéis: [`docs/firestore-rules.md`](docs/firestore-rules.md) e [`docs/credentials.md`](docs/credentials.md).
