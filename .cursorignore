@@ -1,0 +1,9 @@
+# Keep local Firebase/Google credentials out of agent context
+.env
+.env.*
+google-services.json
+GoogleService-Info.plist
+firebase_options.dart
+firebase_options_*.dart
+secrets/
+.firebase/
