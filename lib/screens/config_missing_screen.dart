@@ -22,7 +22,7 @@ class ConfigMissingScreen extends StatelessWidget {
               'e android/app/google-services.json (não versionados):',
             ),
             SizedBox(height: 8),
-            SelectableText('./scripts/firebase-setup.sh'),
+            SelectableText('./sh/firebase-setup.sh'),
             SizedBox(height: 12),
             Text('Referência: docs/credentials.md'),
           ],

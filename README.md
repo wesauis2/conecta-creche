@@ -11,7 +11,7 @@ Firebase e Google Sign-In exigem arquivos que **não** são versionados. Onde co
 Para configurar seu projeto Firebase passo a passo (console + arquivos locais):
 
 ```bash
-./scripts/firebase-setup.sh
+./sh/firebase-setup.sh
 ```
 
 ## Desenvolvimento
