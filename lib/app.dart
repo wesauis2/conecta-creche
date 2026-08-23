@@ -41,7 +41,11 @@ class ConectaCrecheApp extends StatelessWidget {
           return UserSyncGate(
             user: user,
             userRepository: userRepository,
-            child: SignedInScreen(user: user, authService: authService),
+            child: SignedInScreen(
+              user: user,
+              authService: authService,
+              userRepository: userRepository,
+            ),
           );
         },
       ),
