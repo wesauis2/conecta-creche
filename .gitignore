@@ -7,6 +7,15 @@
 build/
 *.iml
 .idea/
+.pub/
+
+# Android generated / local
+android/.gradle/
+android/.kotlin/
+android/local.properties
+android/**/GeneratedPluginRegistrant.java
+android/captures/
+android/.cxx/
 
 # Local Firebase / Google credentials (per-dev; never commit)
 .env
@@ -14,12 +23,11 @@ build/
 !.env.example
 **/google-services.json
 **/GoogleService-Info.plist
-**/firebase_options.dart
-**/firebase_options_*.dart
-!lib/firebase_options_stub.dart
 lib/firebase_options.dart
-android/app/google-services.json
-ios/Runner/GoogleService-Info.plist
 secrets/
 .firebase/
 .flutter-plugins-dependencies
+
+# Keep the committed compile-time stub; ignore any other generated options files.
+lib/firebase_options_*.dart
+!lib/firebase_options_stub.dart
