@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'app.dart';
 import 'auth/google_auth_service.dart';
 import 'firebase/firebase_bootstrap.dart';
+import 'users/user_repository.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,13 +17,20 @@ Future<void> main() async {
       runApp(
         ConectaCrecheApp(
           authService: GoogleAuthService(),
+          userRepository: UserRepository(),
           bootstrapError: bootstrap.error,
         ),
       );
       return;
     case FirebaseBootstrapState.initialized:
       final authService = GoogleAuthService();
+      final userRepository = UserRepository();
       await authService.ensureGoogleSignInInitialized();
-      runApp(ConectaCrecheApp(authService: authService));
+      runApp(
+        ConectaCrecheApp(
+          authService: authService,
+          userRepository: userRepository,
+        ),
+      );
   }
 }
