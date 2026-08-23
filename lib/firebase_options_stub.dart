@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart'
 
 /// Placeholder Firebase options for CI and developers without local config.
 ///
-/// Replace by running `./scripts/firebase-setup.sh` or `flutterfire configure`,
+/// Replace by running `./sh/firebase-setup.sh` or `flutterfire configure`,
 /// which writes the ignored `lib/firebase_options.dart`.
 class DefaultFirebaseOptions {
   static const String stubProjectId = 'STUB_NOT_CONFIGURED';
