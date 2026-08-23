@@ -1,20 +1,28 @@
 import 'package:flutter/material.dart';
 
-void main() {
-  runApp(const MainApp());
-}
+import 'app.dart';
+import 'auth/google_auth_service.dart';
+import 'firebase/firebase_bootstrap.dart';
 
-class MainApp extends StatelessWidget {
-  const MainApp({super.key});
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
 
-  @override
-  Widget build(BuildContext context) {
-    return const MaterialApp(
-      home: Scaffold(
-        body: Center(
-          child: Text('Hello World!'),
+  final bootstrap = await bootstrapFirebase();
+  switch (bootstrap.state) {
+    case FirebaseBootstrapState.missingConfig:
+      runApp(const ConfigMissingApp());
+      return;
+    case FirebaseBootstrapState.failed:
+      runApp(
+        ConectaCrecheApp(
+          authService: GoogleAuthService(),
+          bootstrapError: bootstrap.error,
         ),
-      ),
-    );
+      );
+      return;
+    case FirebaseBootstrapState.initialized:
+      final authService = GoogleAuthService();
+      await authService.ensureGoogleSignInInitialized();
+      runApp(ConectaCrecheApp(authService: authService));
   }
 }
