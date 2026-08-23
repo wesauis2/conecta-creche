@@ -15,13 +15,19 @@ class UserProfile {
   final String? photoUrl;
   final UserRole role;
 
-  factory UserProfile.fromFirestore(Map<String, dynamic> data) {
+  factory UserProfile.fromFirestore({
+    required Map<String, dynamic> userData,
+    Map<String, dynamic>? roleData,
+  }) {
+    final legacyRole = userData['role'] as String?;
+    final roleValue = roleData?['role'] as String? ?? legacyRole;
+
     return UserProfile(
-      uid: data['uid'] as String,
-      email: data['email'] as String?,
-      displayName: data['displayName'] as String?,
-      photoUrl: data['photoUrl'] as String?,
-      role: UserRole.fromFirestore(data['role'] as String?),
+      uid: userData['uid'] as String,
+      email: userData['email'] as String?,
+      displayName: userData['displayName'] as String?,
+      photoUrl: userData['photoUrl'] as String?,
+      role: UserRole.fromFirestore(roleValue),
     );
   }
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -12,6 +14,9 @@ class UserRepository {
 
   CollectionReference<Map<String, dynamic>> get _users =>
       _firestore.collection('users');
+
+  CollectionReference<Map<String, dynamic>> get _userRoles =>
+      _firestore.collection('user_roles');
 
   Future<void> upsertFromFirebaseUser(User user) async {
     final docRef = _users.doc(user.uid);
@@ -33,23 +38,71 @@ class UserRepository {
     if (!snapshot.exists) {
       await docRef.set({
         ...profileFields,
-        'role': UserRole.convidado.name,
         'createdAt': now,
       });
-      return;
+    } else {
+      await docRef.update(profileFields);
     }
 
-    await docRef.update(profileFields);
+    final roleRef = _userRoles.doc(user.uid);
+    final roleSnapshot = await roleRef.get();
+    if (!roleSnapshot.exists) {
+      await roleRef.set({
+        'role': UserRole.convidado.name,
+        'createdAt': now,
+        'updatedAt': now,
+      });
+    }
   }
 
   Stream<UserProfile?> watchProfile(String uid) {
-    return _users.doc(uid).snapshots().map((snapshot) {
-      final data = snapshot.data();
-      if (data == null) {
-        return null;
+    final controller = StreamController<UserProfile?>();
+    DocumentSnapshot<Map<String, dynamic>>? userSnapshot;
+    DocumentSnapshot<Map<String, dynamic>>? roleSnapshot;
+
+    void publish() {
+      final userData = userSnapshot?.data();
+      if (userData == null) {
+        controller.add(null);
+        return;
       }
-      return UserProfile.fromFirestore(data);
-    });
+
+      final roleData = roleSnapshot?.data();
+      controller.add(
+        UserProfile.fromFirestore(
+          userData: userData,
+          roleData: roleData,
+        ),
+      );
+    }
+
+    late final StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>
+        userSubscription;
+    late final StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>
+        roleSubscription;
+
+    userSubscription = _users.doc(uid).snapshots().listen(
+      (snapshot) {
+        userSnapshot = snapshot;
+        publish();
+      },
+      onError: controller.addError,
+    );
+
+    roleSubscription = _userRoles.doc(uid).snapshots().listen(
+      (snapshot) {
+        roleSnapshot = snapshot;
+        publish();
+      },
+      onError: controller.addError,
+    );
+
+    controller.onCancel = () async {
+      await userSubscription.cancel();
+      await roleSubscription.cancel();
+    };
+
+    return controller.stream;
   }
 
   Future<void> updateDisplayName(String uid, String displayName) async {
