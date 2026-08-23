@@ -301,14 +301,18 @@ else
 fi
 note "iOS (ios/Runner/GoogleService-Info.plist) é opcional esta semana — veja docs/credentials.md"
 
-# ── 5. FlutterFire configure ──────────────────────────────────────────────
-stage "FlutterFire — firebase_options.dart" 5
-say "O CLI FlutterFire gera lib/firebase_options.dart (ignorado pelo git)."
-step "Instale o CLI: dart pub global activate flutterfire_cli"
-step "Faça login no Firebase CLI: firebase login"
-step "Garanta que ~/.pub-cache/bin está no PATH."
+# ── 5. FlutterFire configure (opcional) ─────────────────────────────────
+stage "FlutterFire — firebase_options.dart (opcional)" 2
+say "No Android desta semana, só o google-services.json já basta para build e execução."
+say "Este passo gera lib/firebase_options.dart — útil no futuro (iOS/web), mas não é obrigatório."
+if [[ -f "$REPO_ROOT/android/app/google-services.json" ]]; then
+  printf '  %s✓ android/app/google-services.json presente — pode pular o FlutterFire.%s\n' "$GREEN" "$RESET"
+fi
+note "flutterfire configure exige firebase login. Sem CLI logado, ignore este estágio."
+step "Opcional: dart pub global activate flutterfire_cli && firebase login"
+step "Opcional: flutterfire configure --project=<id> --platforms=android --out=lib/firebase_options.dart"
 if command -v flutterfire >/dev/null 2>&1 && [[ -n "${FIREBASE_PROJECT_ID:-}" ]]; then
-  if confirm "Executar flutterfire configure agora (somente Android)"; then
+  if confirm "Executar flutterfire configure agora (opcional)"; then
     if flutterfire configure \
         --project="$FIREBASE_PROJECT_ID" \
         --platforms=android \
@@ -317,22 +321,15 @@ if command -v flutterfire >/dev/null 2>&1 && [[ -n "${FIREBASE_PROJECT_ID:-}" ]]
       WRITTEN_FILES+=("lib/firebase_options.dart")
       printf '  %s✓ gerou%s lib/firebase_options.dart\n' "$GREEN" "$RESET"
     else
-      SKIPPED+=("flutterfire configure → lib/firebase_options.dart")
-      warn "flutterfire configure falhou — rode manualmente na raiz do repo."
+      note "flutterfire falhou (ex.: sem firebase login) — ok para Android se google-services.json existir."
     fi
   else
-    step "Na raiz do repo: flutterfire configure --project=$FIREBASE_PROJECT_ID --platforms=android"
-    SKIPPED+=("flutterfire configure → lib/firebase_options.dart")
+    note "FlutterFire ignorado — use só google-services.json no Android."
   fi
 elif [[ -f "$REPO_ROOT/lib/firebase_options.dart" ]]; then
   note "lib/firebase_options.dart já existe — mantido."
 else
-  if [[ -z "${FIREBASE_PROJECT_ID:-}" ]]; then
-    SKIPPED+=("definir FIREBASE_PROJECT_ID e rodar flutterfire configure")
-  else
-    SKIPPED+=("instalar flutterfire_cli e rodar flutterfire configure")
-  fi
-  step "Na raiz do repo: flutterfire configure --project=<seu-projeto> --platforms=android"
+  note "Sem flutterfire/login: pule. android/app/google-services.json é suficiente para flutter run."
 fi
 
 # ── 6. Verificar gitignore ────────────────────────────────────────────────

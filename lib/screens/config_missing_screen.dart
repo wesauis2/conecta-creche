@@ -18,8 +18,9 @@ class ConfigMissingScreen extends StatelessWidget {
             ),
             SizedBox(height: 12),
             Text(
-              'Execute o wizard local para criar lib/firebase_options.dart '
-              'e android/app/google-services.json (não versionados):',
+              'Execute o wizard local para criar android/app/google-services.json '
+              '(obrigatório no Android). lib/firebase_options.dart é opcional nesta '
+              'fase — o app usa a config nativa do arquivo Google Services.',
             ),
             SizedBox(height: 8),
             SelectableText('./sh/firebase-setup.sh'),
