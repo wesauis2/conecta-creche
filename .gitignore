@@ -1,0 +1,16 @@
+# Agent backlog tickets (disposable work queue; specs live under docs/backlog/)
+.scratch/
+
+# Local Firebase / Google credentials (per-dev; never commit)
+.env
+.env.*
+!.env.example
+**/google-services.json
+**/GoogleService-Info.plist
+**/firebase_options.dart
+**/firebase_options_*.dart
+lib/firebase_options.dart
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+secrets/
+.firebase/
