@@ -8,6 +8,12 @@ Canal entre a rotina diária na creche e os pais de crianças de 1 a 5 anos — 
 
 Firebase e Google Sign-In exigem arquivos que **não** são versionados. Onde colocar cada um: [`docs/credentials.md`](docs/credentials.md).
 
+Para configurar seu projeto Firebase passo a passo (console + arquivos locais):
+
+```bash
+./scripts/firebase-setup.sh
+```
+
 ## Desenvolvimento
 
 ```bash
