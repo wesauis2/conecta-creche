@@ -1,6 +1,13 @@
 # Agent backlog tickets (disposable work queue; specs live under docs/backlog/)
 .scratch/
 
+# Flutter / Dart build artifacts
+.dart_tool/
+.packages
+build/
+*.iml
+.idea/
+
 # Local Firebase / Google credentials (per-dev; never commit)
 .env
 .env.*
