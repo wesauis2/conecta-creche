@@ -7,7 +7,8 @@ Cada desenvolvedor usa **seu próprio projeto Firebase**. Os arquivos abaixo fic
 | Config Android (Google Services) | `android/app/google-services.json` | Console Firebase → Configurações do projeto → seus apps → Android | **Sim** — build e execução |
 | Opções FlutterFire | `lib/firebase_options.dart` | `flutterfire configure` (exige `firebase login`) | **Não** nesta semana — o app usa a config nativa do `google-services.json` |
 | Config iOS (Google Services) | `ios/Runner/GoogleService-Info.plist` | Console Firebase → iOS | Não (só Android esta semana) |
-| Outros segredos (opcional) | `secrets/` | Chaves ou JSON extras | Não |
+| Outros segredos (opcional) | `secrets/` | Chaves ou JSON extras; keystore de upload | Keystore para APK release |
+| Assinatura Android release | `android/key.properties` + `secrets/upload-keystore.jks` | `./sh/create-keystore.sh` | **Sim** para `./sh/make_apk.sh` |
 | Variáveis de ambiente | `.env`, `.env.local`, etc. | Wizard / cópia de `.env.example` | Não |
 | Cache CLI Firebase | `.firebase/` | `firebase deploy` / emuladores | Só se for publicar regras pela CLI |
 
@@ -35,13 +36,43 @@ touch android/app/google-services.json lib/firebase_options.dart
 git status --short   # deve estar vazio
 ```
 
-## Promoção de admin (esta semana)
+## Assinatura Android e Play Protect
 
-Promoção de papéis é **manual** no console Firestore — não há allowlist nem seed automático nesta fase.
+O aviso **“App nocivo detectado… tenta burlar as proteções de segurança do Android”** costuma ser um **falso positivo do Google Play Protect** ao instalar um APK **fora da Play Store** assinado com a **chave debug padrão** do Android SDK (o mesmo certificado em todas as máquinas de desenvolvimento — e também usado por malware).
+
+O app **não** pede permissões sensíveis nem tenta burlar o sistema. O que estava errado no projeto era o `build` release (`./sh/make_apk.sh`) assinar com `signingConfigs.debug`.
+
+### Correção
+
+1. Gere um keystore **só deste projeto** (ignorado pelo git):
+
+   ```bash
+   ./sh/create-keystore.sh
+   ```
+
+2. No [Firebase Console](https://console.firebase.google.com/) → seu projeto → ⚙️ Configurações → app Android, **adicione** os SHA-1 e SHA-256 impressos pelo script (Google Sign-In exige o SHA do certificado que assina o APK).
+
+3. Gere o APK de novo:
+
+   ```bash
+   ./sh/make_apk.sh
+   ```
+
+4. No celular: **desinstale** a versão antiga (assinatura diferente) e instale o APK novo em `build/app/outputs/flutter-apk/`.
+
+Se o Play Protect ainda pedir verificação numa instalação sideload, use **Verificar** / **Instalar mesmo assim** — isso é esperado para apps que não vêm da Play Store.
+
+`flutter run` (debug via USB) continua usando a chave debug automática; o problema crítico era distribuir **release** com essa chave.
+
+## Bootstrap do primeiro admin
+
+O primeiro administrador do projeto ainda é promovido **uma vez** no console Firestore. Depois disso, gestão e admin alteram papéis pela tela **Usuários** no app (respeitando a hierarquia).
 
 1. Abra [Firebase Console](https://console.firebase.google.com/) → seu projeto → **Firestore Database** → **Dados**.
-2. Localize o documento `user_roles/{uid}` (o `uid` aparece na tela de sessão após o primeiro login Google). O perfil fica em `users/{uid}` separadamente.
-3. Edite o campo `role` em `user_roles/{uid}` para um dos valores válidos: `admin`, `gestao`, `cuidador`, `responsavel` ou `convidado` (padrão no primeiro login).
-4. Para liberar um colega como administrador da equipe, defina `role: admin` em `user_roles/{uid}` **uma vez**; o app não consegue alterar papéis pelo cliente (regras bloqueiam `update`/`delete` em `user_roles`).
+2. Faça login no app com Google e anote o `uid` (visível no perfil / documentos criados).
+3. Localize `user_roles/{uid}` (o perfil fica em `users/{uid}` separadamente).
+4. Edite o campo `role` para `admin` (valores válidos: `admin`, `gestao`, `cuidador`, `responsavel`, `convidado`).
+5. Publique as regras atualizadas (`firebase deploy --only firestore:rules`) para habilitar listagem e promoção in-app — ver [`firestore-rules.md`](firestore-rules.md).
+6. No app, abra **Usuários** (ícone de grupo no home) para buscar convidados e definir o acesso.
 
-Deploy das regras que protegem esses documentos: [`docs/firestore-rules.md`](firestore-rules.md).
+Deploy das regras: [`docs/firestore-rules.md`](firestore-rules.md).

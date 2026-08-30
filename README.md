@@ -16,6 +16,8 @@ Para configurar seu projeto Firebase passo a passo (console + `google-services.j
 
 Publicar regras Firestore na nuvem **sim** exige `firebase login` (ver abaixo).
 
+APK release para instalar no celular: gere o keystore uma vez (`./sh/create-keystore.sh`), cadastre o SHA no Firebase, depois `./sh/make_apk.sh`. Sem isso o Play Protect pode marcar o APK como nocivo — ver [`docs/credentials.md`](docs/credentials.md#assinatura-android-e-play-protect).
+
 ## Desenvolvimento
 
 ```bash
@@ -35,4 +37,4 @@ firebase login
 firebase deploy --only firestore:rules
 ```
 
-Passo a passo completo, simulador de negação entre usuários e promoção manual de papéis: [`docs/firestore-rules.md`](docs/firestore-rules.md) e [`docs/credentials.md`](docs/credentials.md).
+Passo a passo completo, simulador de hierarquia e bootstrap do primeiro admin: [`docs/firestore-rules.md`](docs/firestore-rules.md) e [`docs/credentials.md`](docs/credentials.md).
