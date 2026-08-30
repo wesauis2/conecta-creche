@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Keep the web client id generated from google-services.json so release
+     resource shrinking does not strip it (google_sign_in looks it up by name). -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@string/default_web_client_id" />
