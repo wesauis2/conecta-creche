@@ -2,21 +2,68 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function roleDoc(userId) {
+      return get(/databases/$(database)/documents/user_roles/$(userId));
+    }
+
+    function ownRole() {
+      return roleDoc(request.auth.uid).data.role;
+    }
+
+    function rank(role) {
+      return role == 'admin' ? 4
+        : role == 'gestao' ? 3
+        : role == 'cuidador' ? 2
+        : role == 'responsavel' ? 1
+        : 0;
+    }
+
+    function isManager() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/user_roles/$(request.auth.uid))
+        && rank(ownRole()) >= 3;
+    }
+
+    function isValidRole(role) {
+      return role in ['admin', 'gestao', 'cuidador', 'responsavel', 'convidado'];
+    }
+
+    function onlyRoleFieldsChanged() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['role', 'updatedAt']);
+    }
+
     match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow create, update: if request.auth != null
-        && request.auth.uid == userId
+      allow get, list: if isOwner(userId) || isManager();
+      allow create, update: if isOwner(userId)
         && !request.resource.data.keys().hasAny(['role']);
       allow delete: if false;
     }
 
     match /user_roles/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow create: if request.auth != null
-        && request.auth.uid == userId
+      allow get, list: if isOwner(userId) || isManager();
+
+      allow create: if isOwner(userId)
         && !exists(/databases/$(database)/documents/user_roles/$(userId))
         && request.resource.data.role == 'convidado';
-      allow update, delete: if false;
+
+      allow update: if isManager()
+        && request.auth.uid != userId
+        && onlyRoleFieldsChanged()
+        && isValidRole(request.resource.data.role)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && rank(resource.data.role) <= rank(ownRole())
+        && rank(request.resource.data.role) <= rank(ownRole());
+
+      allow delete: if false;
     }
   }
 }

@@ -108,6 +108,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               ),
               controller: _emailController,
             ),
+            const SizedBox(height: 16),
+            InputDecorator(
+              decoration: const InputDecoration(
+                labelText: 'Perfil de acesso',
+                border: OutlineInputBorder(),
+              ),
+              child: Text(widget.profile.role.label),
+            ),
             const SizedBox(height: 24),
             FilledButton(
               onPressed: _saving ? null : _save,
