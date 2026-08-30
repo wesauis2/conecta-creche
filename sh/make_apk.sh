@@ -15,6 +15,8 @@ if [[ ! -f "$KEY_PROPS" ]]; then
   exit 1
 fi
 
+"$ROOT/sh/verify-google-sign-in.sh"
+
 # Stale daemons may still hold a large heap from a previous gradle.properties.
 if [[ -x android/gradlew ]]; then
   (cd android && ./gradlew --stop) >/dev/null 2>&1 || true

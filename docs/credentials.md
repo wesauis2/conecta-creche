@@ -36,6 +36,36 @@ touch android/app/google-services.json lib/firebase_options.dart
 git status --short   # deve estar vazio
 ```
 
+## Google Sign-In (`serverClientId`)
+
+O plugin `google_sign_in` 7+ no Android exige um **cliente OAuth Web** no `google-services.json` (`oauth_client` com `client_type: 3`). Sem isso aparece:
+
+`GoogleSignInException … serverClientId must be provided on Android`
+
+O JSON atual fica incompleto se o provedor Google foi ativado sem app Web / sem baixar o arquivo de novo, ou se o SHA-1 não foi cadastrado.
+
+### Correção
+
+1. Firebase Console → **Authentication** → Sign-in method → **Google** → ativar e salvar.
+2. Configurações do projeto → **Adicionar app → Web** (apelido qualquer) se ainda não existir app Web.
+3. No app **Android**, adicione impressões digitais SHA-1:
+   - Debug: `keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android`
+   - Release/upload: `./sh/create-keystore.sh`
+4. **Baixe de novo** `google-services.json` e substitua `android/app/google-services.json`.
+5. Valide:
+
+   ```bash
+   ./sh/verify-google-sign-in.sh
+   ```
+
+6. Reinstale o app (`flutter run` ou `./sh/make_apk.sh`).
+
+Opcional: passar o ID Web explicitamente no build:
+
+```bash
+flutter run --dart-define=GOOGLE_SERVER_CLIENT_ID=123456789-xxxx.apps.googleusercontent.com
+```
+
 ## Assinatura Android e Play Protect
 
 O aviso **“App nocivo detectado… tenta burlar as proteções de segurança do Android”** costuma ser um **falso positivo do Google Play Protect** ao instalar um APK **fora da Play Store** assinado com a **chave debug padrão** do Android SDK (o mesmo certificado em todas as máquinas de desenvolvimento — e também usado por malware).

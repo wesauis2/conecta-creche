@@ -232,7 +232,7 @@ finish_wizard() {
 }
 
 TOTAL_STAGES=6
-TOTAL_MINUTES=20
+TOTAL_MINUTES=23
 
 pause() {
   printf '  %s%s%s ' "$DIM" "${1:-Press Enter para continuar}" "$RESET"
@@ -264,7 +264,7 @@ open_url "$(firebase_project_url "authentication/providers")"
 step "Clique em 'Começar' se Authentication ainda não estiver ativo."
 step "Na aba 'Sign-in method', abra o provedor 'Google'."
 step "Ative o provedor e escolha um e-mail de suporte do projeto (obrigatório)."
-step "Salve as alterações."
+step "Salve as alterações — isso cria o cliente OAuth Web (serverClientId)."
 pause "Google Sign-In habilitado?"
 
 # ── 3. Firestore ──────────────────────────────────────────────────────────
@@ -278,13 +278,17 @@ pause "Firestore criado?"
 note "Promoção de admin (role gestao): edição manual no console — ver docs/credentials.md"
 
 # ── 4. google-services.json ───────────────────────────────────────────────
-stage "App Android e google-services.json" 5
-say "Registre o app Android e baixe a configuração Google Services."
+stage "App Android e google-services.json" 8
+say "Registre o app Android, cadastre SHA-1 e baixe a configuração Google Services."
+say "O google_sign_in 7+ exige um oauth_client Web (client_type: 3) no JSON."
 open_url "$(firebase_project_url "settings/general")"
-step "Em 'Seus apps', adicione um app Android (ícone Android)."
+step "Em 'Seus apps', adicione um app Android (ícone Android) se ainda não existir."
 step "Package name (applicationId): $ANDROID_PACKAGE"
-step "Apelido e SHA-1 são opcionais esta semana — pode pular."
-step "Baixe google-services.json quando o console oferecer."
+step "Se ainda não houver app Web no projeto: Adicionar app → Web (apelido livre) → registrar."
+step "No app Android → 'Adicionar impressão digital', cadastre SHA-1 do debug e do upload."
+note "Debug: keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android | grep SHA1"
+note "Upload: ./sh/create-keystore.sh  (imprime SHA-1 / SHA-256)"
+step "Baixe google-services.json de novo depois de ativar Google + SHA + app Web."
 note "Destino no repo: android/app/google-services.json (gitignored)"
 ask GOOGLE_SERVICES_SRC "Caminho completo do google-services.json baixado (vazio para pular):"
 if [[ -n "${GOOGLE_SERVICES_SRC:-}" ]]; then
@@ -298,6 +302,14 @@ elif [[ -f "$REPO_ROOT/android/app/google-services.json" ]]; then
   note "android/app/google-services.json já existe — mantido."
 else
   SKIPPED+=("copiar google-services.json → android/app/google-services.json")
+fi
+if [[ -f "$REPO_ROOT/android/app/google-services.json" ]]; then
+  if "$REPO_ROOT/sh/verify-google-sign-in.sh"; then
+    printf '  %s✓ google-services.json com serverClientId%s\n' "$GREEN" "$RESET"
+  else
+    SKIPPED+=("corrigir oauth Web em google-services.json (serverClientId)")
+    warn "JSON incompleto — veja docs/credentials.md#google-sign-in-serverclientid"
+  fi
 fi
 note "iOS (ios/Runner/GoogleService-Info.plist) é opcional esta semana — veja docs/credentials.md"
 
