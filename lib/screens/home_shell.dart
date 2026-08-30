@@ -4,6 +4,7 @@ import '../auth/google_auth_service.dart';
 import '../users/user_profile.dart';
 import '../users/user_repository.dart';
 import 'user_profile_screen.dart';
+import 'users_screen.dart';
 
 class HomeShell extends StatelessWidget {
   const HomeShell({
@@ -29,6 +30,17 @@ class HomeShell extends StatelessWidget {
     );
   }
 
+  void _openUsers(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => UsersScreen(
+          profile: profile,
+          userRepository: userRepository,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final greetingName = profile.displayName?.trim();
@@ -37,6 +49,12 @@ class HomeShell extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Conecta Creche'),
         actions: [
+          if (profile.canManageUsers)
+            IconButton(
+              onPressed: () => _openUsers(context),
+              tooltip: 'Usuários',
+              icon: const Icon(Icons.group_outlined),
+            ),
           IconButton(
             onPressed: () => _openProfile(context),
             tooltip: 'Meu perfil',

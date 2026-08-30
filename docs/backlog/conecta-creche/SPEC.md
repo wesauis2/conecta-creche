@@ -11,8 +11,9 @@ Creches lack a centralized, real-time channel between the daily routine of child
 Deliver a Flutter app skeleton wired to **each developer’s own Firebase project** (credentials never in version control), with:
 
 - Google Sign-In (RF0007)
-- Firestore `users/{uid}` created on first login as `convidado` until a gestor promotes the account (RF0006/RF0007)
-- Security rules committed in-repo
+- Firestore `users/{uid}` + `user_roles/{uid}`; first login creates `role: convidado` until gestão/admin promotes the account (RF0006/RF0007)
+- In-app user management for gestão/admin (list, search, chip filters, elevate access ≤ own rank)
+- Security rules committed in-repo (hierarchy enforced server-side)
 - A user page to view/edit own profile (except email) and log out
 - A `/wizard`-style bash script that guides Firebase console setup and writes config into the correct ignored paths
 - A markdown packet for the university Sistema de Extensão form
@@ -23,19 +24,20 @@ Product requirements remain in the software documentation PDF; Trello holds task
 ## User Stories
 
 - Como integrante do time, quero um wizard de Firebase para criar meu próprio projeto e gravar credenciais nos caminhos locais corretos sem versioná-las.
-- Como usuário novo, quero entrar com Google para ter conta imediata como `convidado`, sem acesso até ser vinculado/promovido.
+- Como usuário novo, quero entrar com Google para ter conta imediata como `convidado`, sem acesso até ser promovido.
+- Como gestão/admin, quero listar usuários (filtro por papel, busca) e definir um perfil ≤ ao meu nível.
 - Como usuário autenticado, quero uma página de usuário em pt-BR para ver meus dados, corrigir o nome de exibição e sair (e-mail somente leitura).
 - Como grupo, quero os RFs/RNFs do documento importados no Trello (lista Backlog, pt-BR) para o backlog do produto ficar rastreável.
 - Como grupo, quero um pacote markdown em pt-BR do formulário de extensão com título, ODS, território e dados da cliente consistentes.
 
 ## Implementation Decisions
 
-- **Roles:** `admin` | `gestao` | `cuidador` | `responsavel` | `convidado` (default on first Google login).
-- **User document:** minimal fields from Google Auth (`uid`, `email`, `displayName`, photo URL if present) plus `role` and timestamps. No child links this week.
+- **Roles:** `admin` | `gestao` | `cuidador` | `responsavel` | `convidado` (default on first Google login). Rank: admin > gestao > cuidador > responsavel > convidado.
+- **User document:** `users/{uid}` holds profile fields from Google Auth (`uid`, `email`, `displayName`, photo URL if present) plus timestamps — **no** `role` field. Role lives in `user_roles/{uid}`.
 - **Credentials:** per-developer Firebase; files live outside VCS (`.gitignore` + `.cursorignore`). Example paths: `android/app/google-services.json`, `lib/firebase_options.dart`, `secrets/` as needed.
-- **Admin promotion:** manual Firestore console edit this week (document the step); no allowlist/seed automation required.
-- **Auth UX:** Google sign-in → role gate (`convidado` sees waiting/no-access) → user page for profile + logout. All user-visible strings in **pt-BR**.
-- **Firestore rules:** versioned in the repo; at minimum enforce authenticated access to own `users/{uid}` document.
+- **Admin bootstrap:** first admin via Firestore console once; afterwards gestão/admin promote in-app (rules enforce hierarchy).
+- **Auth UX:** Google sign-in → role gate (`convidado` sees waiting/no-access) → home for approved roles; gestão/admin see **Usuários**. All user-visible strings in **pt-BR**.
+- **Firestore rules:** versioned in the repo; own-doc writes on `users`; managers may list users/roles and update others’ roles within rank.
 - **Locale:** App UI copy is **pt-BR**. Trello card names/descriptions and the Sistema de Extensão markdown packet are also **pt-BR**. Code identifiers may stay English.
 - **Trello:** CSV import, list `Backlog`, no Members. Cards are a **1:1 mapping of RFs/RNFs** from the software documentation (nothing else). Labels distinguish `RF`/`RNF` and prioridade (`alta`/`media`/`baixa`).
 - **Client / território (extensão):** EEI Creche Tia Edri, Anta Gorda–RS; responsável “Edriane” (surname/email TBD); public phone/address captured in the markdown packet (pt-BR).
@@ -43,19 +45,23 @@ Product requirements remain in the software documentation PDF; Trello holds task
 
 ## Testing Decisions
 
-- Sign in with Google creates/upserts `users/{uid}` with `role: convidado`.
+- Sign in with Google creates/upserts `users/{uid}` and `user_roles/{uid}` with `role: convidado`.
 - Convidado cannot reach privileged shells; waiting/gate UI is shown.
-- Profile edit updates allowed fields and refuses email changes in UI.
+- Gestão/admin open Usuários, filter Convidado by default, search, and assign roles ≤ own rank.
+- Gestão cannot assign `admin` or manage an existing admin; admin can assign any role.
+- Cuidador/responsável have no Usuários entry; direct navigation shows a denial message.
+- Profile edit updates allowed fields and refuses email changes in UI; role is read-only on own profile.
 - Logout returns to sign-in.
-- Security rules: user A cannot read/write user B’s document (verify in rules unit test or console simulator).
+- Security rules: non-managers cannot list others; role updates respect hierarchy (simulator cases in `docs/firestore-rules.md`).
 - Wizard run places config only under ignored paths; `git status` shows no secrets staged.
 
 ## Out of Scope
 
 - RF0001–RF0005, RF0008–RF0009 product features (presence, mural, reports, push, incidents, feedback forms, children registry)
+- Child↔responsible linking and child-scoped data access (depends on children registry)
 - Offline mode (RNF0001), FCM wiring, iOS-first delivery (Android is enough if only one platform is configured this week)
 - Shared/team single Firebase project
-- Automatic role promotion or child↔responsible linking
+- Cloud Functions / custom claims for roles
 - Full-product task decomposition beyond the RF/RNF cards already imported to Trello
 - Week-1 ops tasks (wizard, extensão submit, etc.) as Trello cards — those live only in the local orchestrate backlog
 
