@@ -23,6 +23,19 @@ enum UserRole {
 
   bool get canManageUsers => rank >= UserRole.gestao.rank;
 
+  /// Cuidador+ can read/write the day-to-day presence surface (children
+  /// catalog create/rename, chegada/saída+parecer). See CONTEXT.md
+  /// "Cuidador+".
+  bool get canOperatePresence => rank >= UserRole.cuidador.rank;
+
+  /// Gestão+ can inactivate a child in the catalog. See CONTEXT.md
+  /// "Inativação de criança".
+  bool get canInactivateChild => rank >= UserRole.gestao.rank;
+
+  /// Only admin can alter arrivedAt/departedAt after creation or hard-delete
+  /// a presence record. See CONTEXT.md "Chegada" / "Saída".
+  bool get canAdminPresence => rank >= UserRole.admin.rank;
+
   bool canAssign(UserRole target) => target.rank <= rank;
 
   bool canManage(UserRole other) => other.rank <= rank;
