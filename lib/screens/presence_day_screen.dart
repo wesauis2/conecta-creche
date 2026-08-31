@@ -16,6 +16,8 @@ enum _PresenceFilter { presentes, sairam, todos }
 
 enum _RowMode { chegada, saida, parecer }
 
+enum _AdminAction { editTimestamps, delete }
+
 class _PresenceRow {
   const _PresenceRow({
     required this.child,
@@ -28,6 +30,12 @@ class _PresenceRow {
   final _RowMode mode;
   final PresenceRecord? open;
   final PresenceRecord? lastClosed;
+
+  /// The record admin actions (editar horários/apagar) apply to: the open
+  /// one if present, otherwise the most recent closed one. `null` when the
+  /// child has no record today (plain chegada row), so there is nothing to
+  /// edit or delete.
+  PresenceRecord? get activeRecord => open ?? lastClosed;
 }
 
 /// Cuidador's operational day detail: chips Presentes/Saíram/Todos
@@ -301,6 +309,62 @@ class _PresenceDayScreenState extends State<PresenceDayScreen> {
     }
   }
 
+  /// Admin-only: edit `arrivedAt`/`departedAt`, recalculating `dayKey`/
+  /// `isOpen`. See CONTEXT.md "Chegada" / "Saída" and ticket 06.
+  Future<void> _adminEditTimestamps(Child child, PresenceRecord record) async {
+    final result = await showDialog<_AdminTimestampsResult>(
+      context: context,
+      builder: (context) => _AdminEditTimestampsDialog(
+        childName: child.name,
+        record: record,
+      ),
+    );
+    if (result == null || !mounted) {
+      return;
+    }
+
+    try {
+      await widget.presenceRepository.adminUpdateTimestamps(
+        recordId: record.id,
+        arrivedAt: result.arrivedAt,
+        departedAt: result.departedAt,
+        updatedBy: widget.profile.uid,
+      );
+    } on Object catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Não foi possível salvar os horários: $error'),
+          ),
+        );
+      }
+    }
+  }
+
+  /// Admin-only: hard-deletes a presence record after confirmation. See
+  /// ticket 06.
+  Future<void> _adminDeleteRecord(Child child, PresenceRecord record) async {
+    final confirmed = await _confirm(
+      title: 'Apagar registro?',
+      body: 'Esta ação apaga definitivamente o registro de presença de '
+          '${child.name} de hoje. Não é possível desfazer.',
+      okLabel: 'Apagar',
+    );
+    if (!confirmed || !mounted) {
+      return;
+    }
+
+    try {
+      await widget.presenceRepository.adminDeleteRecord(recordId: record.id);
+    } on Object catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Não foi possível apagar o registro: $error')),
+        );
+      }
+    }
+  }
+
   Future<void> _createChild() async {
     final name = await showDialog<String>(
       context: context,
@@ -423,9 +487,20 @@ class _PresenceDayScreenState extends State<PresenceDayScreen> {
                       separatorBuilder: (_, _) => const SizedBox(height: 8),
                       itemBuilder: (context, index) {
                         final row = rows[index];
+                        final activeRecord = row.activeRecord;
+                        final canAdmin = widget.profile.role.canAdminPresence &&
+                            activeRecord != null;
                         return _PresenceRowTile(
                           row: row,
                           onTap: () => _onRowTap(row),
+                          onAdminEdit: canAdmin
+                              ? () =>
+                                  _adminEditTimestamps(row.child, activeRecord)
+                              : null,
+                          onAdminDelete: canAdmin
+                              ? () =>
+                                  _adminDeleteRecord(row.child, activeRecord)
+                              : null,
                         );
                       },
                     );
@@ -458,10 +533,19 @@ class _PresenceDayScreenState extends State<PresenceDayScreen> {
 }
 
 class _PresenceRowTile extends StatelessWidget {
-  const _PresenceRowTile({required this.row, required this.onTap});
+  const _PresenceRowTile({
+    required this.row,
+    required this.onTap,
+    this.onAdminEdit,
+    this.onAdminDelete,
+  });
 
   final _PresenceRow row;
   final VoidCallback onTap;
+
+  /// Non-null only for `canAdminPresence` roles with a record to act on.
+  final VoidCallback? onAdminEdit;
+  final VoidCallback? onAdminDelete;
 
   static String _formatTime(DateTime instant) {
     final saoPaulo = tz.TZDateTime.from(instant, PresenceClock.saoPauloLocation);
@@ -521,6 +605,24 @@ class _PresenceRowTile extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
+              if (onAdminEdit != null && onAdminDelete != null)
+                PopupMenuButton<_AdminAction>(
+                  tooltip: 'Ações de admin',
+                  onSelected: (action) => switch (action) {
+                    _AdminAction.editTimestamps => onAdminEdit!(),
+                    _AdminAction.delete => onAdminDelete!(),
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(
+                      value: _AdminAction.editTimestamps,
+                      child: Text('Editar horários'),
+                    ),
+                    PopupMenuItem(
+                      value: _AdminAction.delete,
+                      child: Text('Apagar registro'),
+                    ),
+                  ],
+                ),
             ],
           ),
         ),
@@ -565,6 +667,164 @@ class _NewChildDialogState extends State<_NewChildDialog> {
           onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
           child: const Text('Salvar'),
         ),
+      ],
+    );
+  }
+}
+
+/// Result of [_AdminEditTimestampsDialog]: the corrected instants, ready to
+/// pass to `PresenceRepository.adminUpdateTimestamps`. [departedAt] is
+/// `null` when the admin left the record open.
+class _AdminTimestampsResult {
+  const _AdminTimestampsResult({required this.arrivedAt, this.departedAt});
+
+  final DateTime arrivedAt;
+  final DateTime? departedAt;
+}
+
+const String _adminDateTimeHint = 'dd/mm/aaaa hh:mm';
+final RegExp _adminDateTimePattern =
+    RegExp(r'^(\d{2})/(\d{2})/(\d{4})\s+(\d{2}):(\d{2})$');
+
+/// Formats [instant] as `dd/mm/aaaa hh:mm` in São Paulo civil time, for
+/// prefilling the admin edit dialog's text fields.
+String _formatAdminDateTime(DateTime instant) {
+  final saoPaulo = tz.TZDateTime.from(instant, PresenceClock.saoPauloLocation);
+  final dd = saoPaulo.day.toString().padLeft(2, '0');
+  final mm = saoPaulo.month.toString().padLeft(2, '0');
+  final yyyy = saoPaulo.year.toString().padLeft(4, '0');
+  final hh = saoPaulo.hour.toString().padLeft(2, '0');
+  final min = saoPaulo.minute.toString().padLeft(2, '0');
+  return '$dd/$mm/$yyyy $hh:$min';
+}
+
+/// Parses a `dd/mm/aaaa hh:mm` string as a São Paulo civil instant, or
+/// returns `null` if it doesn't match the expected shape.
+DateTime? _parseAdminDateTime(String input) {
+  final match = _adminDateTimePattern.firstMatch(input.trim());
+  if (match == null) {
+    return null;
+  }
+  final day = int.parse(match.group(1)!);
+  final month = int.parse(match.group(2)!);
+  final year = int.parse(match.group(3)!);
+  final hour = int.parse(match.group(4)!);
+  final minute = int.parse(match.group(5)!);
+  try {
+    return tz.TZDateTime(
+      PresenceClock.saoPauloLocation,
+      year,
+      month,
+      day,
+      hour,
+      minute,
+    );
+  } on Object {
+    return null;
+  }
+}
+
+/// Admin-only dialog to correct `arrivedAt`/`departedAt`. Leaving "Saída"
+/// blank keeps (or reopens) the record as open. See ticket 06.
+class _AdminEditTimestampsDialog extends StatefulWidget {
+  const _AdminEditTimestampsDialog({
+    required this.childName,
+    required this.record,
+  });
+
+  final String childName;
+  final PresenceRecord record;
+
+  @override
+  State<_AdminEditTimestampsDialog> createState() =>
+      _AdminEditTimestampsDialogState();
+}
+
+class _AdminEditTimestampsDialogState
+    extends State<_AdminEditTimestampsDialog> {
+  late final TextEditingController _arrivedController = TextEditingController(
+    text: _formatAdminDateTime(widget.record.arrivedAt),
+  );
+  late final TextEditingController _departedController = TextEditingController(
+    text: widget.record.departedAt == null
+        ? ''
+        : _formatAdminDateTime(widget.record.departedAt!),
+  );
+  String? _error;
+
+  @override
+  void dispose() {
+    _arrivedController.dispose();
+    _departedController.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final arrivedAt = _parseAdminDateTime(_arrivedController.text);
+    if (arrivedAt == null) {
+      setState(() => _error = 'Chegada inválida. Use $_adminDateTimeHint.');
+      return;
+    }
+
+    final departedText = _departedController.text.trim();
+    DateTime? departedAt;
+    if (departedText.isNotEmpty) {
+      departedAt = _parseAdminDateTime(departedText);
+      if (departedAt == null) {
+        setState(() => _error = 'Saída inválida. Use $_adminDateTimeHint.');
+        return;
+      }
+      if (!departedAt.isAfter(arrivedAt)) {
+        setState(() => _error = 'A saída deve ser depois da chegada.');
+        return;
+      }
+    }
+
+    Navigator.of(context).pop(
+      _AdminTimestampsResult(arrivedAt: arrivedAt, departedAt: departedAt),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('Editar horários · ${widget.childName}'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _arrivedController,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Chegada',
+              hintText: _adminDateTimeHint,
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _departedController,
+            decoration: const InputDecoration(
+              labelText: 'Saída',
+              hintText: _adminDateTimeHint,
+              helperText: 'Em branco = registro fica aberto',
+            ),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              _error!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(onPressed: _save, child: const Text('Salvar')),
       ],
     );
   }
