@@ -5,11 +5,15 @@ import '../presence/child_repository.dart';
 import '../presence/presence_repository.dart';
 import '../users/user_profile.dart';
 import '../users/user_repository.dart';
-import 'presence_day_screen.dart';
-import 'presence_gestao_screen.dart';
+import 'presence_home_body.dart';
 import 'user_profile_screen.dart';
 import 'users_screen.dart';
 
+/// Thin post-login shell: owns the auth-dependent app bar shortcuts (perfil/
+/// usuários) and hands role-based routing off to [PresenceHomeBody], which
+/// only needs [profile] and the presence repos. Kept thin on purpose so the
+/// routing logic stays testable without `GoogleAuthService`/
+/// `UserRepository`. See ticket 07.
 class HomeShell extends StatelessWidget {
   const HomeShell({
     super.key,
@@ -51,86 +55,23 @@ class HomeShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Gestão/admin land on the aggregate presença view; cuidador keeps the
-    // day view (ticket 07 will finalize role-based home routing).
-    if (profile.role.canInactivateChild) {
-      return PresenceGestaoScreen(
-        profile: profile,
-        childRepository: childRepository,
-        presenceRepository: presenceRepository,
-        appBarLeadingActions: [
-          if (profile.canManageUsers)
-            IconButton(
-              onPressed: () => _openUsers(context),
-              tooltip: 'Usuários',
-              icon: const Icon(Icons.group_outlined),
-            ),
+    return PresenceHomeBody(
+      profile: profile,
+      childRepository: childRepository,
+      presenceRepository: presenceRepository,
+      appBarActions: [
+        if (profile.canManageUsers)
           IconButton(
-            onPressed: () => _openProfile(context),
-            tooltip: 'Meu perfil',
-            icon: const Icon(Icons.person_outline),
+            onPressed: () => _openUsers(context),
+            tooltip: 'Usuários',
+            icon: const Icon(Icons.group_outlined),
           ),
-        ],
-      );
-    }
-    if (profile.role.canOperatePresence) {
-      return PresenceDayScreen(
-        profile: profile,
-        childRepository: childRepository,
-        presenceRepository: presenceRepository,
-        appBarLeadingActions: [
-          if (profile.canManageUsers)
-            IconButton(
-              onPressed: () => _openUsers(context),
-              tooltip: 'Usuários',
-              icon: const Icon(Icons.group_outlined),
-            ),
-          IconButton(
-            onPressed: () => _openProfile(context),
-            tooltip: 'Meu perfil',
-            icon: const Icon(Icons.person_outline),
-          ),
-        ],
-      );
-    }
-
-    final greetingName = profile.displayName?.trim();
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Conecta Creche'),
-        actions: [
-          if (profile.canManageUsers)
-            IconButton(
-              onPressed: () => _openUsers(context),
-              tooltip: 'Usuários',
-              icon: const Icon(Icons.group_outlined),
-            ),
-          IconButton(
-            onPressed: () => _openProfile(context),
-            tooltip: 'Meu perfil',
-            icon: const Icon(Icons.person_outline),
-          ),
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              greetingName != null && greetingName.isNotEmpty
-                  ? 'Olá, $greetingName!'
-                  : 'Bem-vindo ao Conecta Creche',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Em breve você poderá acompanhar a rotina da creche por aqui.',
-            ),
-          ],
+        IconButton(
+          onPressed: () => _openProfile(context),
+          tooltip: 'Meu perfil',
+          icon: const Icon(Icons.person_outline),
         ),
-      ),
+      ],
     );
   }
 }
