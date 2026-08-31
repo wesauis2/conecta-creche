@@ -167,6 +167,39 @@ void main() {
     expect(find.textContaining('Excluir'), findsNothing);
   });
 
+  testWidgets('cuidador sees the active-only empty state when no children exist',
+      (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        ChildrenScreen(
+          profile: _profile(UserRole.cuidador),
+          childRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('Nenhuma criança ativa cadastrada.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('gestão sees the generic empty state when no children exist',
+      (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        ChildrenScreen(
+          profile: _profile(UserRole.gestao),
+          childRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Nenhuma criança cadastrada.'), findsOneWidget);
+  });
+
   testWidgets('blocks access for roles without canOperatePresence',
       (tester) async {
     await tester.pumpWidget(

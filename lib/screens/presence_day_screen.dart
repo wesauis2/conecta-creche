@@ -469,12 +469,11 @@ class _PresenceDayScreenState extends State<PresenceDayScreen> {
                       recordsSnapshot.data!,
                     );
                     if (rows.isEmpty) {
-                      return const Center(
+                      return Center(
                         child: Padding(
-                          padding: EdgeInsets.all(24),
+                          padding: const EdgeInsets.all(24),
                           child: Text(
-                            'Nada neste filtro.\n'
-                            'Em Todos você registra chegadas.',
+                            _emptyStateMessage(_filter),
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -529,6 +528,16 @@ class _PresenceDayScreenState extends State<PresenceDayScreen> {
         _PresenceFilter.presentes => 'Presentes',
         _PresenceFilter.sairam => 'Saíram',
         _PresenceFilter.todos => 'Todos',
+      };
+
+  /// pt-BR empty state per chip; "Todos" is only empty when there are no
+  /// active children at all, so it points at "Nova" instead of a filter.
+  String _emptyStateMessage(_PresenceFilter filter) => switch (filter) {
+        _PresenceFilter.presentes =>
+          'Nenhuma criança presente agora.\nToque em Todos para registrar uma chegada.',
+        _PresenceFilter.sairam => 'Nenhuma criança saiu ainda hoje.',
+        _PresenceFilter.todos =>
+          'Nenhuma criança cadastrada.\nToque em Nova para cadastrar.',
       };
 }
 
