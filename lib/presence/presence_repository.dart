@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'parecer.dart';
+import 'presence_clock.dart';
 import 'presence_open_guard.dart';
 import 'presence_record.dart';
 
@@ -141,6 +142,43 @@ class PresenceRepository {
       'updatedAt': FieldValue.serverTimestamp(),
       'updatedBy': updatedBy,
     });
+  }
+
+  /// Admin-only correction of `arrivedAt`/`departedAt` on an existing
+  /// record, recalculating `dayKey` (from the new `arrivedAt`, in São Paulo
+  /// civil time) and `isOpen` (true when [departedAt] is `null`). Firestore
+  /// rules reject this update for non-admin roles; callers should also gate
+  /// the affordance on `UserRole.canAdminPresence`. See CONTEXT.md
+  /// "Chegada" / "Saída".
+  Future<void> adminUpdateTimestamps({
+    required String recordId,
+    required DateTime arrivedAt,
+    DateTime? departedAt,
+    required String updatedBy,
+  }) async {
+    if (departedAt != null && !departedAt.isAfter(arrivedAt)) {
+      throw ArgumentError.value(
+        departedAt,
+        'departedAt',
+        'must be after arrivedAt',
+      );
+    }
+
+    await _records.doc(recordId).update({
+      'dayKey': PresenceClock.dayKeyFor(arrivedAt),
+      'arrivedAt': Timestamp.fromDate(arrivedAt),
+      'departedAt': departedAt == null ? null : Timestamp.fromDate(departedAt),
+      'isOpen': departedAt == null,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedBy': updatedBy,
+    });
+  }
+
+  /// Admin-only hard delete of a presence record (no soft delete/undo).
+  /// Firestore rules reject this for non-admin roles; callers should also
+  /// gate the affordance on `UserRole.canAdminPresence`.
+  Future<void> adminDeleteRecord({required String recordId}) async {
+    await _records.doc(recordId).delete();
   }
 
   /// Whether [childId] already has an open record on [dayKey]. Exposed for
