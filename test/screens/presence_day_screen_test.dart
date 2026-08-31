@@ -137,6 +137,40 @@ void main() {
     });
   });
 
+  group('empty states', () {
+    testWidgets('Presentes with no active children hints at Todos',
+        (tester) async {
+      await pumpScreen(tester);
+
+      expect(
+        find.textContaining('Nenhuma criança presente agora.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('Saíram with no closed records shows its own message',
+        (tester) async {
+      await childRepository.createChild(name: 'Sofia', createdBy: 'u1');
+
+      await pumpScreen(tester);
+      await tester.tap(find.text('Saíram'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Nenhuma criança saiu ainda hoje.'), findsOneWidget);
+    });
+
+    testWidgets('Todos with no children at all hints at Nova', (tester) async {
+      await pumpScreen(tester);
+      await tester.tap(find.text('Todos'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('Nenhuma criança cadastrada.'),
+        findsOneWidget,
+      );
+    });
+  });
+
   group('app bar', () {
     testWidgets('cuidador sees Nova and Crianças actions', (tester) async {
       await pumpScreen(tester);

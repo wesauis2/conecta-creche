@@ -200,6 +200,56 @@ void main() {
       expect(find.text('Miguel'), findsOneWidget);
     });
 
+    testWidgets(
+        'filter-aware empty message: only Saíram selected but the only '
+        'record is still open',
+        (tester) async {
+      final sofiaId =
+          await childRepository.createChild(name: 'Sofia', createdBy: 'u1');
+      await presenceRepository.registerArrival(
+        childId: sofiaId,
+        dayKey: _selectedDayKey,
+        arrivedAt: DateTime.utc(2026, 9, 1, 8),
+        createdBy: 'u1',
+      );
+
+      await pumpScreen(tester);
+
+      await tester.tap(find.widgetWithText(FilterChip, 'Saíram'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Nenhuma criança saiu neste dia.'), findsOneWidget);
+      expect(find.text('Sofia'), findsNothing);
+    });
+
+    testWidgets(
+        'filter-aware empty message: only Presentes selected but the only '
+        'record is already closed',
+        (tester) async {
+      final sofiaId =
+          await childRepository.createChild(name: 'Sofia', createdBy: 'u1');
+      final recordId = await presenceRepository.registerArrival(
+        childId: sofiaId,
+        dayKey: _selectedDayKey,
+        arrivedAt: DateTime.utc(2026, 9, 1, 8),
+        createdBy: 'u1',
+      );
+      await presenceRepository.registerDeparture(
+        recordId: recordId,
+        departedAt: DateTime.utc(2026, 9, 1, 12),
+        parecer: const Parecer(),
+        updatedBy: 'u1',
+      );
+
+      await pumpScreen(tester);
+
+      await tester.tap(find.widgetWithText(FilterChip, 'Presentes'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Nenhuma criança presente neste dia.'), findsOneWidget);
+      expect(find.text('Sofia'), findsNothing);
+    });
+
     testWidgets('shows a warning banner when the day has open records',
         (tester) async {
       final sofiaId =
