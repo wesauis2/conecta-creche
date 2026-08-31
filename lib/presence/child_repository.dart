@@ -64,4 +64,22 @@ class ChildRepository {
     );
     return children;
   }
+
+  /// Live catalog for the Crianças screen (see CONTEXT.md "Gestão de
+  /// crianças"): all children by default so gestão/admin can reactivate,
+  /// or only active ones when [activeOnly] is true (cuidador). Sorted
+  /// client-side to avoid a composite index.
+  Stream<List<Child>> watchChildren({bool activeOnly = false}) {
+    final query =
+        activeOnly ? _children.where('active', isEqualTo: true) : _children;
+    return query.snapshots().map((snapshot) {
+      final children = snapshot.docs
+          .map((doc) => Child.fromFirestore(doc.id, doc.data()))
+          .toList();
+      children.sort(
+        (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+      );
+      return children;
+    });
+  }
 }
