@@ -1,0 +1,23 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "presence_records",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "dayKey", "order": "ASCENDING" },
+        { "fieldPath": "isOpen", "order": "ASCENDING" },
+        { "fieldPath": "arrivedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "presence_records",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "dayKey", "order": "ASCENDING" },
+        { "fieldPath": "isOpen", "order": "ASCENDING" },
+        { "fieldPath": "departedAt", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
