@@ -6,6 +6,7 @@ import '../presence/presence_repository.dart';
 import '../users/user_profile.dart';
 import '../users/user_repository.dart';
 import 'presence_day_screen.dart';
+import 'presence_gestao_screen.dart';
 import 'user_profile_screen.dart';
 import 'users_screen.dart';
 
@@ -50,8 +51,28 @@ class HomeShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Cuidador+ land on the presença day view (ticket 07 will refine
-    // role-based home for gestão/admin's weekly/monthly aggregate).
+    // Gestão/admin land on the aggregate presença view; cuidador keeps the
+    // day view (ticket 07 will finalize role-based home routing).
+    if (profile.role.canInactivateChild) {
+      return PresenceGestaoScreen(
+        profile: profile,
+        childRepository: childRepository,
+        presenceRepository: presenceRepository,
+        appBarLeadingActions: [
+          if (profile.canManageUsers)
+            IconButton(
+              onPressed: () => _openUsers(context),
+              tooltip: 'Usuários',
+              icon: const Icon(Icons.group_outlined),
+            ),
+          IconButton(
+            onPressed: () => _openProfile(context),
+            tooltip: 'Meu perfil',
+            icon: const Icon(Icons.person_outline),
+          ),
+        ],
+      );
+    }
     if (profile.role.canOperatePresence) {
       return PresenceDayScreen(
         profile: profile,
