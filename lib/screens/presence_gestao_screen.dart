@@ -215,6 +215,20 @@ class _PresenceGestaoScreenState extends State<PresenceGestaoScreen> {
         _GestaoFilter.sairam => 'Saíram',
       };
 
+  /// pt-BR empty state for the embedded list once the day has records but
+  /// the selected chips exclude all of them (only possible with exactly one
+  /// chip selected; none selected shows both, per CONTEXT.md "Filtro de
+  /// presença (gestão, detalhe do dia)").
+  String _filteredEmptyMessage() {
+    if (_filters.length == 1 && _filters.contains(_GestaoFilter.presentes)) {
+      return 'Nenhuma criança presente neste dia.';
+    }
+    if (_filters.length == 1 && _filters.contains(_GestaoFilter.sairam)) {
+      return 'Nenhuma criança saiu neste dia.';
+    }
+    return 'Nada nos filtros selecionados.';
+  }
+
   String _rangeLabel() {
     if (_view == _GestaoView.semana) {
       final days = _weekDays(_anchor);
@@ -596,8 +610,8 @@ class _PresenceGestaoScreenState extends State<PresenceGestaoScreen> {
                   child: records.isEmpty
                       ? const Center(child: Text('Sem registros neste dia.'))
                       : filtered.isEmpty
-                          ? const Center(
-                              child: Text('Nada nos filtros selecionados.'),
+                          ? Center(
+                              child: Text(_filteredEmptyMessage()),
                             )
                           : ListView.separated(
                               padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),

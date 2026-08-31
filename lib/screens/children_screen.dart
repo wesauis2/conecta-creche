@@ -152,11 +152,14 @@ class _ChildrenScreenState extends State<ChildrenScreen> {
 
           final children = snapshot.data!;
           if (children.isEmpty) {
-            return const Center(
+            return Center(
               child: Padding(
-                padding: EdgeInsets.all(24),
+                padding: const EdgeInsets.all(24),
                 child: Text(
-                  'Nenhuma criança cadastrada.',
+                  canInactivate
+                      ? 'Nenhuma criança cadastrada.'
+                      : 'Nenhuma criança ativa cadastrada.\n'
+                          'Cadastre uma pela tela de Presença.',
                   textAlign: TextAlign.center,
                 ),
               ),
