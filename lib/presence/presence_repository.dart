@@ -103,6 +103,46 @@ class PresenceRepository {
     return records;
   }
 
+  /// Live records for a civil day, ordered by `arrivedAt`. Mirrors
+  /// [listByDayKey] but as a stream, for screens that need to react to
+  /// chegada/saída as they happen (e.g. the cuidador day view).
+  Stream<List<PresenceRecord>> watchByDayKey({
+    required String dayKey,
+    bool? isOpen,
+  }) {
+    Query<Map<String, dynamic>> query = _records.where(
+      'dayKey',
+      isEqualTo: dayKey,
+    );
+    if (isOpen != null) {
+      query = query.where('isOpen', isEqualTo: isOpen);
+    }
+
+    return query.snapshots().map((snapshot) {
+      final records = snapshot.docs
+          .map((doc) => PresenceRecord.fromFirestore(doc.id, doc.data()))
+          .toList()
+        ..sort((a, b) => a.arrivedAt.compareTo(b.arrivedAt));
+      return records;
+    });
+  }
+
+  /// Updates only the `parecer` of an existing record (open or already
+  /// closed), without touching `arrivedAt`/`departedAt`/`isOpen`. Used when
+  /// the cuidador corrects a saída's parecer later in the same flow. See
+  /// CONTEXT.md "Parecer".
+  Future<void> updateParecer({
+    required String recordId,
+    required Parecer parecer,
+    required String updatedBy,
+  }) async {
+    await _records.doc(recordId).update({
+      'parecer': parecer.toMap(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedBy': updatedBy,
+    });
+  }
+
   /// Whether [childId] already has an open record on [dayKey]. Exposed for
   /// UI warnings (e.g. gestão's "aviso de abertos") without duplicating the
   /// query shape used by the open-guard.

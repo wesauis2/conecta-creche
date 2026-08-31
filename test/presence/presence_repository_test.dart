@@ -204,4 +204,119 @@ void main() {
       expect(closed.map((r) => r.id), [closedId]);
     });
   });
+
+  group('watchByDayKey', () {
+    test('emits records for a dayKey ordered by arrivedAt', () async {
+      final firstId = await repository.registerArrival(
+        childId: 'child-1',
+        dayKey: '2026-08-30',
+        arrivedAt: DateTime.utc(2026, 8, 30, 8),
+        createdBy: 'uid-1',
+      );
+      final secondId = await repository.registerArrival(
+        childId: 'child-2',
+        dayKey: '2026-08-30',
+        arrivedAt: DateTime.utc(2026, 8, 30, 9),
+        createdBy: 'uid-1',
+      );
+      await repository.registerArrival(
+        childId: 'child-3',
+        dayKey: '2026-08-29',
+        arrivedAt: DateTime.utc(2026, 8, 29, 9),
+        createdBy: 'uid-1',
+      );
+
+      final records =
+          await repository.watchByDayKey(dayKey: '2026-08-30').first;
+
+      expect(records.map((r) => r.id), [firstId, secondId]);
+    });
+
+    test('filters by isOpen when provided', () async {
+      final openId = await repository.registerArrival(
+        childId: 'child-1',
+        dayKey: '2026-08-30',
+        arrivedAt: DateTime.utc(2026, 8, 30, 8),
+        createdBy: 'uid-1',
+      );
+      final closedId = await repository.registerArrival(
+        childId: 'child-2',
+        dayKey: '2026-08-30',
+        arrivedAt: DateTime.utc(2026, 8, 30, 9),
+        createdBy: 'uid-1',
+      );
+      await repository.registerDeparture(
+        recordId: closedId,
+        departedAt: DateTime.utc(2026, 8, 30, 10),
+        parecer: const Parecer(),
+        updatedBy: 'uid-1',
+      );
+
+      final open = await repository
+          .watchByDayKey(dayKey: '2026-08-30', isOpen: true)
+          .first;
+
+      expect(open.map((r) => r.id), [openId]);
+    });
+
+    test('emits a new snapshot when a record is added', () async {
+      await repository.registerArrival(
+        childId: 'child-1',
+        dayKey: '2026-08-30',
+        arrivedAt: DateTime.utc(2026, 8, 30, 8),
+        createdBy: 'uid-1',
+      );
+
+      final emissions = <int>[];
+      final subscription = repository
+          .watchByDayKey(dayKey: '2026-08-30')
+          .listen((records) => emissions.add(records.length));
+
+      await Future<void>.delayed(Duration.zero);
+      await repository.registerArrival(
+        childId: 'child-2',
+        dayKey: '2026-08-30',
+        arrivedAt: DateTime.utc(2026, 8, 30, 9),
+        createdBy: 'uid-1',
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(emissions.last, 2);
+      await subscription.cancel();
+    });
+  });
+
+  group('updateParecer', () {
+    test('updates the parecer of a closed record without reopening it',
+        () async {
+      final id = await repository.registerArrival(
+        childId: 'child-1',
+        dayKey: '2026-08-30',
+        arrivedAt: DateTime.utc(2026, 8, 30, 8),
+        createdBy: 'uid-1',
+      );
+      await repository.registerDeparture(
+        recordId: id,
+        departedAt: DateTime.utc(2026, 8, 30, 17),
+        parecer: const Parecer(),
+        updatedBy: 'uid-1',
+      );
+
+      await repository.updateParecer(
+        recordId: id,
+        parecer: const Parecer(humor: ParecerHumor.irritado),
+        updatedBy: 'uid-2',
+      );
+
+      final doc =
+          await firestore.collection('presence_records').doc(id).get();
+      final data = doc.data()!;
+
+      expect(data['parecer']['humor'], 'irritado');
+      expect(data['isOpen'], isFalse);
+      expect(data['updatedBy'], 'uid-2');
+      // Immutable fields untouched.
+      expect(data['departedAt'], isNotNull);
+    });
+  });
 }
