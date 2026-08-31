@@ -342,6 +342,187 @@ void main() {
     });
   });
 
+  group('admin affordances', () {
+    testWidgets('cuidador does not see the admin actions menu', (tester) async {
+      final sofiaId =
+          await childRepository.createChild(name: 'Sofia', createdBy: 'u1');
+      await presenceRepository.registerArrival(
+        childId: sofiaId,
+        dayKey: _dayKey,
+        arrivedAt: DateTime.utc(2026, 8, 30, 8),
+        createdBy: 'u1',
+      );
+
+      await pumpScreen(tester);
+
+      expect(find.byIcon(Icons.more_vert), findsNothing);
+    });
+
+    testWidgets('admin sees the admin actions menu on a row with a record',
+        (tester) async {
+      final sofiaId =
+          await childRepository.createChild(name: 'Sofia', createdBy: 'u1');
+      await presenceRepository.registerArrival(
+        childId: sofiaId,
+        dayKey: _dayKey,
+        arrivedAt: DateTime.utc(2026, 8, 30, 8),
+        createdBy: 'u1',
+      );
+      // No record at all for Bruno: nothing to edit/delete.
+      await childRepository.createChild(name: 'Bruno', createdBy: 'u1');
+
+      await pumpScreen(tester, role: UserRole.admin);
+      await tester.tap(find.text('Todos'));
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.more_vert), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Editar horários'), findsOneWidget);
+      expect(find.text('Apagar registro'), findsOneWidget);
+    });
+
+    testWidgets('admin edits timestamps, recalculating dayKey and isOpen',
+        (tester) async {
+      final sofiaId =
+          await childRepository.createChild(name: 'Sofia', createdBy: 'u1');
+      final recordId = await presenceRepository.registerArrival(
+        childId: sofiaId,
+        dayKey: _dayKey,
+        arrivedAt: DateTime.utc(2026, 8, 30, 8),
+        createdBy: 'u1',
+      );
+
+      await pumpScreen(tester, role: UserRole.admin);
+
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Editar horários'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Editar horários · Sofia'), findsOneWidget);
+
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Chegada').first,
+        '30/08/2026 08:00',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Saída').first,
+        '30/08/2026 12:00',
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Salvar'));
+      await tester.pumpAndSettle();
+
+      final doc =
+          await firestore.collection('presence_records').doc(recordId).get();
+      final data = doc.data()!;
+      expect(data['isOpen'], isFalse);
+      expect(data['dayKey'], '2026-08-30');
+      expect(data['updatedBy'], 'uid-admin');
+
+      // Record closed now: shows up under Saíram instead of Presentes.
+      await tester.tap(find.text('Saíram'));
+      await tester.pumpAndSettle();
+      expect(find.text('Sofia'), findsOneWidget);
+    });
+
+    testWidgets('invalid timestamp input shows an inline error and does not save',
+        (tester) async {
+      final sofiaId =
+          await childRepository.createChild(name: 'Sofia', createdBy: 'u1');
+      await presenceRepository.registerArrival(
+        childId: sofiaId,
+        dayKey: _dayKey,
+        arrivedAt: DateTime.utc(2026, 8, 30, 8),
+        createdBy: 'u1',
+      );
+
+      await pumpScreen(tester, role: UserRole.admin);
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Editar horários'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Chegada').first,
+        'não é uma data',
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Salvar'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Chegada inválida'), findsOneWidget);
+      // Dialog stays open.
+      expect(find.text('Editar horários · Sofia'), findsOneWidget);
+    });
+
+    testWidgets('admin deletes a record after confirming', (tester) async {
+      final sofiaId =
+          await childRepository.createChild(name: 'Sofia', createdBy: 'u1');
+      final recordId = await presenceRepository.registerArrival(
+        childId: sofiaId,
+        dayKey: _dayKey,
+        arrivedAt: DateTime.utc(2026, 8, 30, 8),
+        createdBy: 'u1',
+      );
+
+      await pumpScreen(tester, role: UserRole.admin);
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Apagar registro'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Apagar registro?'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, 'Apagar'));
+      await tester.pumpAndSettle();
+
+      final doc =
+          await firestore.collection('presence_records').doc(recordId).get();
+      expect(doc.exists, isFalse);
+    });
+
+    testWidgets('cancelling the delete confirmation keeps the record',
+        (tester) async {
+      final sofiaId =
+          await childRepository.createChild(name: 'Sofia', createdBy: 'u1');
+      final recordId = await presenceRepository.registerArrival(
+        childId: sofiaId,
+        dayKey: _dayKey,
+        arrivedAt: DateTime.utc(2026, 8, 30, 8),
+        createdBy: 'u1',
+      );
+
+      await pumpScreen(tester, role: UserRole.admin);
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Apagar registro'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(TextButton, 'Cancelar'));
+      await tester.pumpAndSettle();
+
+      final doc =
+          await firestore.collection('presence_records').doc(recordId).get();
+      expect(doc.exists, isTrue);
+    });
+
+    testWidgets('gestão does not see the admin actions menu', (tester) async {
+      final sofiaId =
+          await childRepository.createChild(name: 'Sofia', createdBy: 'u1');
+      await presenceRepository.registerArrival(
+        childId: sofiaId,
+        dayKey: _dayKey,
+        arrivedAt: DateTime.utc(2026, 8, 30, 8),
+        createdBy: 'u1',
+      );
+
+      await pumpScreen(tester, role: UserRole.gestao);
+
+      expect(find.byIcon(Icons.more_vert), findsNothing);
+    });
+  });
+
   group('access control', () {
     testWidgets('roles without canOperatePresence never reach this screen in HomeShell',
         (tester) async {
