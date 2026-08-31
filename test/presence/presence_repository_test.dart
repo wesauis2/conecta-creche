@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:conecta_creche/presence/parecer.dart';
 import 'package:conecta_creche/presence/presence_open_guard.dart';
 import 'package:conecta_creche/presence/presence_repository.dart';
@@ -283,6 +284,124 @@ void main() {
 
       expect(emissions.last, 2);
       await subscription.cancel();
+    });
+  });
+
+  group('adminUpdateTimestamps', () {
+    test('corrects arrivedAt/departedAt on a closed record, keeping isOpen false',
+        () async {
+      final id = await repository.registerArrival(
+        childId: 'child-1',
+        dayKey: '2026-08-30',
+        arrivedAt: DateTime.utc(2026, 8, 30, 8),
+        createdBy: 'uid-1',
+      );
+      await repository.registerDeparture(
+        recordId: id,
+        departedAt: DateTime.utc(2026, 8, 30, 17),
+        parecer: const Parecer(),
+        updatedBy: 'uid-1',
+      );
+
+      await repository.adminUpdateTimestamps(
+        recordId: id,
+        arrivedAt: DateTime.utc(2026, 8, 30, 9),
+        departedAt: DateTime.utc(2026, 8, 30, 18),
+        updatedBy: 'admin-1',
+      );
+
+      final doc =
+          await firestore.collection('presence_records').doc(id).get();
+      final data = doc.data()!;
+
+      expect(data['arrivedAt'], Timestamp.fromDate(DateTime.utc(2026, 8, 30, 9)));
+      expect(data['departedAt'], Timestamp.fromDate(DateTime.utc(2026, 8, 30, 18)));
+      expect(data['isOpen'], isFalse);
+      expect(data['dayKey'], '2026-08-30');
+      expect(data['updatedBy'], 'admin-1');
+    });
+
+    test('recalculates dayKey when the new arrivedAt lands on a different civil day',
+        () async {
+      final id = await repository.registerArrival(
+        childId: 'child-1',
+        dayKey: '2026-08-30',
+        arrivedAt: DateTime.utc(2026, 8, 30, 12),
+        createdBy: 'uid-1',
+      );
+
+      // 2026-08-31 02:00 UTC is 2026-08-30 23:00 in São Paulo (UTC-3),
+      // still the same civil day; push it further to cross into the next
+      // São Paulo civil day.
+      await repository.adminUpdateTimestamps(
+        recordId: id,
+        arrivedAt: DateTime.utc(2026, 8, 31, 4),
+        updatedBy: 'admin-1',
+      );
+
+      final doc =
+          await firestore.collection('presence_records').doc(id).get();
+      final data = doc.data()!;
+
+      expect(data['dayKey'], '2026-08-31');
+    });
+
+    test('clearing departedAt reopens the record (isOpen: true)', () async {
+      final id = await repository.registerArrival(
+        childId: 'child-1',
+        dayKey: '2026-08-30',
+        arrivedAt: DateTime.utc(2026, 8, 30, 8),
+        createdBy: 'uid-1',
+      );
+      await repository.registerDeparture(
+        recordId: id,
+        departedAt: DateTime.utc(2026, 8, 30, 17),
+        parecer: const Parecer(),
+        updatedBy: 'uid-1',
+      );
+
+      await repository.adminUpdateTimestamps(
+        recordId: id,
+        arrivedAt: DateTime.utc(2026, 8, 30, 8),
+        updatedBy: 'admin-1',
+      );
+
+      final doc =
+          await firestore.collection('presence_records').doc(id).get();
+      final data = doc.data()!;
+
+      expect(data['departedAt'], isNull);
+      expect(data.containsKey('departedAt'), isTrue);
+      expect(data['isOpen'], isTrue);
+    });
+
+    test('rejects a departedAt at or before arrivedAt', () {
+      expect(
+        () => repository.adminUpdateTimestamps(
+          recordId: 'whatever',
+          arrivedAt: DateTime.utc(2026, 8, 30, 12),
+          departedAt: DateTime.utc(2026, 8, 30, 12),
+          updatedBy: 'admin-1',
+        ),
+        throwsArgumentError,
+      );
+    });
+  });
+
+  group('adminDeleteRecord', () {
+    test('hard-deletes the record', () async {
+      final id = await repository.registerArrival(
+        childId: 'child-1',
+        dayKey: '2026-08-30',
+        arrivedAt: DateTime.utc(2026, 8, 30, 8),
+        createdBy: 'uid-1',
+      );
+
+      await repository.adminDeleteRecord(recordId: id);
+
+      final doc =
+          await firestore.collection('presence_records').doc(id).get();
+      expect(doc.exists, isFalse);
     });
   });
 
