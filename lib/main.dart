@@ -4,6 +4,7 @@ import 'app.dart';
 import 'auth/google_auth_service.dart';
 import 'firebase/firebase_bootstrap.dart';
 import 'presence/child_repository.dart';
+import 'presence/presence_repository.dart';
 import 'users/user_repository.dart';
 
 Future<void> main() async {
@@ -27,12 +28,14 @@ Future<void> main() async {
       final authService = GoogleAuthService();
       final userRepository = UserRepository();
       final childRepository = ChildRepository();
+      final presenceRepository = PresenceRepository();
       await authService.ensureGoogleSignInInitialized();
       runApp(
         ConectaCrecheApp(
           authService: authService,
           userRepository: userRepository,
           childRepository: childRepository,
+          presenceRepository: presenceRepository,
         ),
       );
   }
