@@ -1,20 +1,75 @@
 /// Chorou? — SPEC v1 options, default "não".
 enum ParecerChorou { nao, umPouco, muito }
 
+/// pt-BR button-group label for [ParecerChorou], see CONTEXT.md "Parecer".
+extension ParecerChorouLabel on ParecerChorou {
+  String get label => switch (this) {
+        ParecerChorou.nao => 'Não',
+        ParecerChorou.umPouco => 'Um pouco',
+        ParecerChorou.muito => 'Muito',
+      };
+}
+
 /// Comportamento? — SPEC v1 options, default "tranquilo".
 enum ParecerComportamento { tranquilo, agitado, precisouDeAtencao }
+
+/// pt-BR button-group label for [ParecerComportamento].
+extension ParecerComportamentoLabel on ParecerComportamento {
+  String get label => switch (this) {
+        ParecerComportamento.tranquilo => 'Tranquilo',
+        ParecerComportamento.agitado => 'Agitado',
+        ParecerComportamento.precisouDeAtencao => 'Precisou de atenção',
+      };
+}
 
 /// Comeu? — SPEC v1 options, default "bem".
 enum ParecerComeu { bem, parcial, pouco, nao }
 
+/// pt-BR button-group label for [ParecerComeu].
+extension ParecerComeuLabel on ParecerComeu {
+  String get label => switch (this) {
+        ParecerComeu.bem => 'Bem',
+        ParecerComeu.parcial => 'Parcial',
+        ParecerComeu.pouco => 'Pouco',
+        ParecerComeu.nao => 'Não',
+      };
+}
+
 /// Dormiu? — SPEC v1 options, default "cochilou".
 enum ParecerDormiu { sim, cochilou, nao }
+
+/// pt-BR button-group label for [ParecerDormiu].
+extension ParecerDormiuLabel on ParecerDormiu {
+  String get label => switch (this) {
+        ParecerDormiu.sim => 'Sim',
+        ParecerDormiu.cochilou => 'Cochilou',
+        ParecerDormiu.nao => 'Não',
+      };
+}
 
 /// Evacuações? — SPEC v1 options, default "normal".
 enum ParecerEvacuacoes { normal, naoFez, atencao }
 
+/// pt-BR button-group label for [ParecerEvacuacoes].
+extension ParecerEvacuacoesLabel on ParecerEvacuacoes {
+  String get label => switch (this) {
+        ParecerEvacuacoes.normal => 'Normal',
+        ParecerEvacuacoes.naoFez => 'Não fez',
+        ParecerEvacuacoes.atencao => 'Atenção',
+      };
+}
+
 /// Humor geral? — SPEC v1 options, default "contente".
 enum ParecerHumor { contente, neutro, irritado }
+
+/// pt-BR button-group label for [ParecerHumor].
+extension ParecerHumorLabel on ParecerHumor {
+  String get label => switch (this) {
+        ParecerHumor.contente => 'Contente',
+        ParecerHumor.neutro => 'Neutro',
+        ParecerHumor.irritado => 'Irritado',
+      };
+}
 
 /// Fixed quick-answer questionnaire filled at departure ("saída").
 ///
