@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 class GoogleAuthService {
@@ -43,7 +44,8 @@ class GoogleAuthService {
 
       final credential = GoogleAuthProvider.credential(idToken: idToken);
       return _auth.signInWithCredential(credential);
-    } on GoogleSignInException catch (error) {
+    } on GoogleSignInException catch (error, trace) {
+      debugPrint('Google Sign-In falhou: $error'+ trace.toString());
       if (error.code == GoogleSignInExceptionCode.clientConfigurationError) {
         throw StateError(
           'Google Sign-In sem serverClientId. No Firebase: ative o provedor '
