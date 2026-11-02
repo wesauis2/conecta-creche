@@ -1,146 +1,336 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
 
-import 'post_mural.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// Repositório apenas de interface (mock): posts em memória, sem Firestore
-/// nem Storage. Fotos são placeholders coloridos.
-class MuralRepository {
-  MuralRepository() : _itens = _dadosIniciais();
+import 'mural_post.dart';
 
-  final List<PostMural> _itens;
+/// Contrato do mural (timeline por efetividade). Ver CONTEXT.md "Mural".
+abstract class MuralPostsRepository {
+  Future<String> createPost({
+    required String title,
+    required String body,
+    required MuralPostKind kind,
+    required String createdBy,
+    DateTime? releasedAt,
+    DateTime? effectiveAt,
+    String? location,
+    String? scheduleText,
+  });
 
-  static const List<FotoMural> fotosExemplo = <FotoMural>[
-    FotoMural(
-      legenda: 'Pintura com tinta guache',
-      cor: Color(0xFFF06292),
-      icone: Icons.palette,
-    ),
-    FotoMural(
-      legenda: 'Hora da história',
-      cor: Color(0xFF4DB6AC),
-      icone: Icons.menu_book,
-    ),
-    FotoMural(
-      legenda: 'Brincadeiras no parquinho',
-      cor: Color(0xFF81C784),
-      icone: Icons.park,
-    ),
-    FotoMural(
-      legenda: 'Aniversariantes do mês',
-      cor: Color(0xFFFFB74D),
-      icone: Icons.cake,
-    ),
-    FotoMural(
-      legenda: 'Roda de música',
-      cor: Color(0xFF7986CB),
-      icone: Icons.music_note,
-    ),
-    FotoMural(
-      legenda: 'Hora do lanche',
-      cor: Color(0xFFBA68C8),
-      icone: Icons.restaurant,
-    ),
-  ];
+  Future<void> updatePost({
+    required String postId,
+    required String updatedBy,
+    String? title,
+    String? body,
+    MuralPostKind? kind,
+    DateTime? releasedAt,
+    DateTime? effectiveAt,
+    String? location,
+    String? scheduleText,
+    bool clearLocation = false,
+    bool clearScheduleText = false,
+  });
 
-  static List<PostMural> _dadosIniciais() {
-    final agora = DateTime.now();
-    return <PostMural>[
-      PostMural(
-        id: 'p1',
-        tipo: TipoPost.lembrete,
-        titulo: 'Reunião de pais — sexta, 18h30',
-        texto: 'Vamos conversar sobre o planejamento do último trimestre e '
-            'a festa de encerramento. Sua presença é muito importante!',
-        autor: 'Helena Duarte',
-        cargo: 'Direção',
-        turma: 'Todas as turmas',
-        criadoEm: agora.subtract(const Duration(days: 2)),
-        fixado: true,
-        curtidas: 12,
-        visualizacoes: 41,
-      ),
-      PostMural(
-        id: 'p2',
-        tipo: TipoPost.foto,
-        titulo: 'Tarde de pintura no Maternal II',
-        texto: 'As crianças exploraram cores e texturas com tinta guache. '
-            'Olha só quanta criatividade!',
-        autor: 'Marina Prado',
-        cargo: 'Professora',
-        turma: 'Maternal II',
-        criadoEm: agora.subtract(const Duration(hours: 2)),
-        fotos: [fotosExemplo[0], fotosExemplo[4], fotosExemplo[3], fotosExemplo[5]],
-        curtidas: 18,
-        visualizacoes: 22,
-      ),
-      PostMural(
-        id: 'p3',
-        tipo: TipoPost.lembrete,
-        titulo: 'Amanhã: passeio ao parque',
-        texto: 'Enviar chapéu, protetor solar e garrafinha de água '
-            'identificada. Saída às 9h, retorno às 11h30.',
-        autor: 'Juliana Reis',
-        cargo: 'Cuidadora',
-        turma: 'Jardim I',
-        criadoEm: agora.subtract(const Duration(hours: 5)),
-        curtidas: 7,
-        visualizacoes: 15,
-      ),
-      PostMural(
-        id: 'p4',
-        tipo: TipoPost.aviso,
-        titulo: 'Recesso de 12 de outubro',
-        texto: 'Não haverá aula na segunda-feira, 12/10 (feriado de Nossa '
-            'Senhora Aparecida). Retornamos normalmente na terça.',
-        autor: 'Helena Duarte',
-        cargo: 'Direção',
-        turma: 'Todas as turmas',
-        criadoEm: agora.subtract(const Duration(days: 1, hours: 3)),
-        curtidas: 9,
-        visualizacoes: 38,
-      ),
-      PostMural(
-        id: 'p5',
-        tipo: TipoPost.foto,
-        titulo: 'Hora da história no Berçário',
-        texto: 'Livros sensoriais e muita curiosidade na roda de hoje.',
-        autor: 'Carla Menezes',
-        cargo: 'Cuidadora',
-        turma: 'Berçário',
-        criadoEm: agora.subtract(const Duration(days: 1, hours: 8)),
-        fotos: [fotosExemplo[1], fotosExemplo[2]],
-        curtidas: 24,
-        visualizacoes: 17,
-      ),
-      PostMural(
-        id: 'p6',
-        tipo: TipoPost.aviso,
-        titulo: 'Frio chegando: agasalho identificado',
-        texto: 'Por favor, coloquem o nome nos casacos e cobertores das '
-            'crianças para evitar trocas. Obrigada!',
-        autor: 'Marina Prado',
-        cargo: 'Professora',
-        turma: 'Todas as turmas',
-        criadoEm: agora.subtract(const Duration(days: 4)),
-        curtidas: 5,
-        visualizacoes: 36,
-      ),
-    ];
+  Stream<List<MuralPost>> watchVisiblePosts({DateTime? asOf});
+
+  Stream<List<MuralPost>> watchPosts({
+    bool includeUnreleased = false,
+    DateTime? asOf,
+  });
+
+  Future<List<MuralPost>> listVisiblePosts({
+    DateTime? asOf,
+    int pageSize = 20,
+    DateTime? startAfterEffectiveAt,
+    String? startAfterId,
+  });
+}
+
+/// Acesso Firestore a `mural_posts`. Ver docs/requisitos/mural.md.
+class MuralRepository implements MuralPostsRepository {
+  MuralRepository({FirebaseFirestore? firestore})
+      : _firestore = firestore ?? FirebaseFirestore.instance;
+
+  final FirebaseFirestore _firestore;
+
+  CollectionReference<Map<String, dynamic>> get _posts =>
+      _firestore.collection('mural_posts');
+
+  /// Cria publicação. Se [effectiveAt] for omitido, copia [releasedAt]
+  /// (ou "agora" quando ambos omitidos — publicação imediata).
+  @override
+  Future<String> createPost({
+    required String title,
+    required String body,
+    required MuralPostKind kind,
+    required String createdBy,
+    DateTime? releasedAt,
+    DateTime? effectiveAt,
+    String? location,
+    String? scheduleText,
+  }) async {
+    final now = DateTime.now().toUtc();
+    final released = releasedAt ?? now;
+    final effective = effectiveAt ?? released;
+    final serverNow = FieldValue.serverTimestamp();
+
+    final payload = <String, dynamic>{
+      'title': title,
+      'body': body,
+      'kind': kind.firestoreValue,
+      'createdAt': serverNow,
+      'updatedAt': serverNow,
+      'createdBy': createdBy,
+      'updatedBy': createdBy,
+      'releasedAt': Timestamp.fromDate(released),
+      'effectiveAt': Timestamp.fromDate(effective),
+    };
+    if (location != null && location.trim().isNotEmpty) {
+      payload['location'] = location.trim();
+    }
+    if (scheduleText != null && scheduleText.trim().isNotEmpty) {
+      payload['scheduleText'] = scheduleText.trim();
+    }
+
+    final docRef = await _posts.add(payload);
+    return docRef.id;
   }
 
-  /// Fixados primeiro, depois do mais recente para o mais antigo.
-  List<PostMural> listar() {
-    final copia = List<PostMural>.from(_itens);
-    copia.sort((a, b) {
-      if (a.fixado != b.fixado) return a.fixado ? -1 : 1;
-      return b.criadoEm.compareTo(a.criadoEm);
+  /// Atualização parcial; sempre carimba `updatedAt`/`updatedBy`.
+  @override
+  Future<void> updatePost({
+    required String postId,
+    required String updatedBy,
+    String? title,
+    String? body,
+    MuralPostKind? kind,
+    DateTime? releasedAt,
+    DateTime? effectiveAt,
+    String? location,
+    String? scheduleText,
+    bool clearLocation = false,
+    bool clearScheduleText = false,
+  }) async {
+    final fields = <String, dynamic>{
+      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedBy': updatedBy,
+    };
+    if (title != null) fields['title'] = title;
+    if (body != null) fields['body'] = body;
+    if (kind != null) fields['kind'] = kind.firestoreValue;
+    if (releasedAt != null) {
+      fields['releasedAt'] = Timestamp.fromDate(releasedAt);
+    }
+    if (effectiveAt != null) {
+      fields['effectiveAt'] = Timestamp.fromDate(effectiveAt);
+    }
+    if (clearLocation) {
+      fields['location'] = FieldValue.delete();
+    } else if (location != null) {
+      fields['location'] = location;
+    }
+    if (clearScheduleText) {
+      fields['scheduleText'] = FieldValue.delete();
+    } else if (scheduleText != null) {
+      fields['scheduleText'] = scheduleText;
+    }
+    await _posts.doc(postId).update(fields);
+  }
+
+  /// Timeline ao vivo: só itens com `releasedAt <= asOf`, ordenados por
+  /// `effectiveAt` desc (client-side para evitar índice composto).
+  @override
+  Stream<List<MuralPost>> watchVisiblePosts({DateTime? asOf}) {
+    return watchPosts(includeUnreleased: false, asOf: asOf);
+  }
+
+  /// Feed com opção de incluir agendados (gestão+). Ordenação por
+  /// `effectiveAt` desc.
+  @override
+  Stream<List<MuralPost>> watchPosts({
+    bool includeUnreleased = false,
+    DateTime? asOf,
+  }) {
+    return _posts.snapshots().map((snapshot) {
+      final now = asOf ?? DateTime.now();
+      final posts = snapshot.docs
+          .map((doc) => MuralPost.fromFirestore(doc.id, doc.data()))
+          .where((post) => includeUnreleased || post.isReleased(asOf: now))
+          .toList();
+      sortMuralPostsByEffectiveAtDesc(posts);
+      return posts;
     });
-    return copia;
   }
 
-  /// Simula publicação: só altera a lista em memória.
-  Future<void> publicar(PostMural post) async {
-    await Future<void>.delayed(const Duration(milliseconds: 400));
-    _itens.add(post);
+  /// Página da timeline visível (scroll infinito). Ordenação estável por
+  /// `effectiveAt` desc, desempate por id desc.
+  @override
+  Future<List<MuralPost>> listVisiblePosts({
+    DateTime? asOf,
+    int pageSize = 20,
+    DateTime? startAfterEffectiveAt,
+    String? startAfterId,
+  }) async {
+    final now = asOf ?? DateTime.now();
+    final snapshot = await _posts.get();
+    final posts = snapshot.docs
+        .map((doc) => MuralPost.fromFirestore(doc.id, doc.data()))
+        .where((post) => post.isReleased(asOf: now))
+        .toList();
+    sortMuralPostsByEffectiveAtDesc(posts);
+
+    Iterable<MuralPost> page = posts;
+    if (startAfterEffectiveAt != null && startAfterId != null) {
+      page = posts.where((post) {
+        final cmp = post.effectiveAt.compareTo(startAfterEffectiveAt);
+        if (cmp != 0) return cmp < 0;
+        return post.id.compareTo(startAfterId) < 0;
+      });
+    }
+    return page.take(pageSize).toList(growable: false);
+  }
+}
+
+void sortMuralPostsByEffectiveAtDesc(List<MuralPost> posts) {
+  posts.sort((a, b) {
+    final byEffective = b.effectiveAt.compareTo(a.effectiveAt);
+    if (byEffective != 0) return byEffective;
+    return b.id.compareTo(a.id);
+  });
+}
+
+/// Repositório em memória para previews/dev sem Firebase.
+class MemoryMuralRepository implements MuralPostsRepository {
+  MemoryMuralRepository() : _controller = StreamController.broadcast();
+
+  final List<MuralPost> _posts = <MuralPost>[];
+  final StreamController<void> _controller;
+  var _seq = 0;
+
+  void dispose() {
+    _controller.close();
+  }
+
+  void _notify() {
+    if (!_controller.isClosed) {
+      _controller.add(null);
+    }
+  }
+
+  List<MuralPost> _filtered({
+    required bool includeUnreleased,
+    DateTime? asOf,
+  }) {
+    final now = asOf ?? DateTime.now();
+    final posts = _posts
+        .where((post) => includeUnreleased || post.isReleased(asOf: now))
+        .toList();
+    sortMuralPostsByEffectiveAtDesc(posts);
+    return posts;
+  }
+
+  @override
+  Future<String> createPost({
+    required String title,
+    required String body,
+    required MuralPostKind kind,
+    required String createdBy,
+    DateTime? releasedAt,
+    DateTime? effectiveAt,
+    String? location,
+    String? scheduleText,
+  }) async {
+    final now = DateTime.now();
+    final released = releasedAt ?? now;
+    final effective = effectiveAt ?? released;
+    final id = 'mem_${_seq++}';
+    _posts.add(
+      MuralPost(
+        id: id,
+        title: title,
+        body: body,
+        kind: kind,
+        releasedAt: released,
+        effectiveAt: effective,
+        createdAt: now,
+        updatedAt: now,
+        createdBy: createdBy,
+        updatedBy: createdBy,
+        location: location,
+        scheduleText: scheduleText,
+      ),
+    );
+    _notify();
+    return id;
+  }
+
+  @override
+  Future<void> updatePost({
+    required String postId,
+    required String updatedBy,
+    String? title,
+    String? body,
+    MuralPostKind? kind,
+    DateTime? releasedAt,
+    DateTime? effectiveAt,
+    String? location,
+    String? scheduleText,
+    bool clearLocation = false,
+    bool clearScheduleText = false,
+  }) async {
+    final index = _posts.indexWhere((p) => p.id == postId);
+    if (index < 0) return;
+    final current = _posts[index];
+    _posts[index] = MuralPost(
+      id: current.id,
+      title: title ?? current.title,
+      body: body ?? current.body,
+      kind: kind ?? current.kind,
+      releasedAt: releasedAt ?? current.releasedAt,
+      effectiveAt: effectiveAt ?? current.effectiveAt,
+      createdAt: current.createdAt,
+      updatedAt: DateTime.now(),
+      createdBy: current.createdBy,
+      updatedBy: updatedBy,
+      location: clearLocation ? null : (location ?? current.location),
+      scheduleText:
+          clearScheduleText ? null : (scheduleText ?? current.scheduleText),
+    );
+    _notify();
+  }
+
+  @override
+  Stream<List<MuralPost>> watchVisiblePosts({DateTime? asOf}) {
+    return watchPosts(includeUnreleased: false, asOf: asOf);
+  }
+
+  @override
+  Stream<List<MuralPost>> watchPosts({
+    bool includeUnreleased = false,
+    DateTime? asOf,
+  }) async* {
+    yield _filtered(includeUnreleased: includeUnreleased, asOf: asOf);
+    await for (final _ in _controller.stream) {
+      yield _filtered(includeUnreleased: includeUnreleased, asOf: asOf);
+    }
+  }
+
+  @override
+  Future<List<MuralPost>> listVisiblePosts({
+    DateTime? asOf,
+    int pageSize = 20,
+    DateTime? startAfterEffectiveAt,
+    String? startAfterId,
+  }) async {
+    final posts = _filtered(includeUnreleased: false, asOf: asOf);
+    Iterable<MuralPost> page = posts;
+    if (startAfterEffectiveAt != null && startAfterId != null) {
+      page = posts.where((post) {
+        final cmp = post.effectiveAt.compareTo(startAfterEffectiveAt);
+        if (cmp != 0) return cmp < 0;
+        return post.id.compareTo(startAfterId) < 0;
+      });
+    }
+    return page.take(pageSize).toList(growable: false);
   }
 }

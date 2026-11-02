@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../auth/google_auth_service.dart';
 import '../forms/form_question_repository.dart';
+import '../mural/mural_repository.dart';
 import '../presence/child_repository.dart';
 import '../presence/presence_repository.dart';
 import '../users/user_profile.dart';
@@ -19,6 +20,7 @@ class SignedInScreen extends StatelessWidget {
     required this.childRepository,
     required this.presenceRepository,
     required this.formQuestionRepository,
+    required this.muralRepository,
   });
 
   final User user;
@@ -27,6 +29,7 @@ class SignedInScreen extends StatelessWidget {
   final ChildRepository childRepository;
   final PresenceRepository presenceRepository;
   final FormQuestionRepository formQuestionRepository;
+  final MuralPostsRepository muralRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -65,6 +68,7 @@ class SignedInScreen extends StatelessWidget {
           childRepository: childRepository,
           presenceRepository: presenceRepository,
           formQuestionRepository: formQuestionRepository,
+          muralRepository: muralRepository,
         );
       },
     );

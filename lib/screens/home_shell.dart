@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../auth/google_auth_service.dart';
 import '../forms/form_question_repository.dart';
+import '../mural/mural_repository.dart';
 import '../presence/child_repository.dart';
 import '../presence/presence_repository.dart';
 import '../shell/shell_tabs.dart';
@@ -30,6 +31,7 @@ class HomeShell extends StatelessWidget {
     required this.childRepository,
     required this.presenceRepository,
     required this.formQuestionRepository,
+    required this.muralRepository,
   });
 
   final UserProfile profile;
@@ -38,6 +40,7 @@ class HomeShell extends StatelessWidget {
   final ChildRepository childRepository;
   final PresenceRepository presenceRepository;
   final FormQuestionRepository formQuestionRepository;
+  final MuralPostsRepository muralRepository;
 
   void _openProfile(BuildContext context) {
     Navigator.of(context).push(
@@ -107,13 +110,11 @@ class HomeShell extends StatelessWidget {
                 : 'Bem-vindo ao Conecta Creche')
             : null;
         return MuralScreen(
+          repository: muralRepository,
+          authorUid: profile.uid,
           mostrarAppBar: true,
           saudacao: greeting,
-          podePublicar: profile.role.canInactivateChild,
-          autorNome: greetingName != null && greetingName.isNotEmpty
-              ? greetingName
-              : 'Equipe da creche',
-          autorCargo: profile.role.label,
+          podePublicar: profile.role.canPublishMural,
         );
       case ShellModule.incidentes:
         return const ModulePlaceholderScreen(

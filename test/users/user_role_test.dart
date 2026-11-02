@@ -41,6 +41,19 @@ void main() {
     });
   });
 
+  group('UserRole.canPublishMural', () {
+    test('is true for gestao and admin', () {
+      expect(UserRole.gestao.canPublishMural, isTrue);
+      expect(UserRole.admin.canPublishMural, isTrue);
+    });
+
+    test('is false below gestao', () {
+      expect(UserRole.cuidador.canPublishMural, isFalse);
+      expect(UserRole.responsavel.canPublishMural, isFalse);
+      expect(UserRole.convidado.canPublishMural, isFalse);
+    });
+  });
+
   group('UserRole.canAdminPresence', () {
     test('is true only for admin', () {
       expect(UserRole.admin.canAdminPresence, isTrue);

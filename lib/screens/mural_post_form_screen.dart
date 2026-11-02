@@ -1,125 +1,176 @@
 import 'package:flutter/material.dart';
 
-import '../mural/foto_placeholder.dart';
+import '../mural/mural_post.dart';
 import '../mural/mural_repository.dart';
-import '../mural/post_mural.dart';
 
-/// Formulário de nova publicação no mural (só interface: as fotos são
-/// ilustrativas e nada é enviado de fato).
+/// Formulário de criar/editar publicação do mural (gestão+).
 class MuralPostFormScreen extends StatefulWidget {
   const MuralPostFormScreen({
     super.key,
-    required this.autor,
-    required this.cargo,
+    required this.repository,
+    required this.authorUid,
+    this.existing,
   });
 
-  final String autor;
-  final String cargo;
+  final MuralPostsRepository repository;
+  final String authorUid;
+  final MuralPost? existing;
 
   @override
   State<MuralPostFormScreen> createState() => _MuralPostFormScreenState();
 }
 
 class _MuralPostFormScreenState extends State<MuralPostFormScreen> {
-  static const int _maxFotos = 6;
-
   final _formKey = GlobalKey<FormState>();
-  final _tituloController = TextEditingController();
-  final _textoController = TextEditingController();
+  late final TextEditingController _tituloController;
+  late final TextEditingController _textoController;
+  late final TextEditingController _localController;
+  late final TextEditingController _horarioController;
 
-  TipoPost _tipo = TipoPost.aviso;
-  String _turma = turmasMural.first;
-  bool _fixado = false;
-  bool _publicando = false;
-  final List<FotoMural> _fotos = <FotoMural>[];
+  late MuralPostKind _kind;
+  late DateTime _releasedAt;
+  late DateTime _effectiveAt;
+  bool _sameEffective = true;
+  bool _salvando = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final existing = widget.existing;
+    final now = DateTime.now();
+    _tituloController = TextEditingController(text: existing?.title ?? '');
+    _textoController = TextEditingController(text: existing?.body ?? '');
+    _localController = TextEditingController(text: existing?.location ?? '');
+    _horarioController =
+        TextEditingController(text: existing?.scheduleText ?? '');
+    _kind = existing?.kind ?? MuralPostKind.comunicado;
+    _releasedAt = existing?.releasedAt ?? now;
+    _effectiveAt = existing?.effectiveAt ?? _releasedAt;
+    _sameEffective = existing == null ||
+        existing.effectiveAt.isAtSameMomentAs(existing.releasedAt);
+  }
 
   @override
   void dispose() {
     _tituloController.dispose();
     _textoController.dispose();
+    _localController.dispose();
+    _horarioController.dispose();
     super.dispose();
   }
 
-  void _adicionarFoto() {
-    if (_fotos.length >= _maxFotos) return;
+  Future<void> _pickDateTime({required bool released}) async {
+    final initial = released ? _releasedAt : _effectiveAt;
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (date == null || !mounted) return;
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+    if (time == null || !mounted) return;
+
+    final selected = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    );
     setState(() {
-      _fotos.add(
-        MuralRepository.fotosExemplo[
-            _fotos.length % MuralRepository.fotosExemplo.length],
-      );
+      if (released) {
+        _releasedAt = selected;
+        if (_sameEffective) {
+          _effectiveAt = selected;
+        }
+      } else {
+        _effectiveAt = selected;
+        _sameEffective = selected.isAtSameMomentAs(_releasedAt);
+      }
     });
   }
 
-  Future<void> _publicar() async {
+  Future<void> _salvar() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_tipo == TipoPost.foto && _fotos.isEmpty) {
+
+    setState(() => _salvando = true);
+    final title = _tituloController.text.trim();
+    final body = _textoController.text.trim();
+    final location = _localController.text.trim();
+    final schedule = _horarioController.text.trim();
+    final effective = _sameEffective ? _releasedAt : _effectiveAt;
+
+    try {
+      final existing = widget.existing;
+      if (existing == null) {
+        await widget.repository.createPost(
+          title: title,
+          body: body,
+          kind: _kind,
+          createdBy: widget.authorUid,
+          releasedAt: _releasedAt,
+          effectiveAt: effective,
+          location: location.isEmpty ? null : location,
+          scheduleText: schedule.isEmpty ? null : schedule,
+        );
+      } else {
+        await widget.repository.updatePost(
+          postId: existing.id,
+          updatedBy: widget.authorUid,
+          title: title,
+          body: body,
+          kind: _kind,
+          releasedAt: _releasedAt,
+          effectiveAt: effective,
+          location: location.isEmpty ? null : location,
+          scheduleText: schedule.isEmpty ? null : schedule,
+          clearLocation: location.isEmpty && existing.location != null,
+          clearScheduleText: schedule.isEmpty && existing.scheduleText != null,
+        );
+      }
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() => _salvando = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Adicione ao menos uma foto.')),
+        SnackBar(content: Text('Não foi possível salvar: $error')),
       );
-      return;
     }
-
-    setState(() => _publicando = true);
-    await Future<void>.delayed(const Duration(milliseconds: 500));
-    if (!mounted) return;
-
-    Navigator.of(context).pop(
-      PostMural(
-        id: 'p_${DateTime.now().microsecondsSinceEpoch}',
-        tipo: _tipo,
-        titulo: _tituloController.text.trim(),
-        texto: _textoController.text.trim(),
-        autor: widget.autor,
-        cargo: widget.cargo,
-        turma: _turma,
-        criadoEm: DateTime.now(),
-        fixado: _fixado,
-        fotos: List<FotoMural>.from(_fotos),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final editing = widget.existing != null;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Nova publicação')),
+      appBar: AppBar(
+        title: Text(editing ? 'Editar publicação' : 'Nova publicação'),
+      ),
       body: Form(
         key: _formKey,
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            SegmentedButton<TipoPost>(
+            SegmentedButton<MuralPostKind>(
               showSelectedIcon: false,
               segments: [
-                for (final tipo in TipoPost.values)
-                  ButtonSegment<TipoPost>(
-                    value: tipo,
-                    icon: Icon(tipo.icone),
-                    label: Text(tipo.label),
+                for (final kind in MuralPostKind.values)
+                  ButtonSegment<MuralPostKind>(
+                    value: kind,
+                    icon: Icon(kind.icon),
+                    label: Text(kind.label),
                   ),
               ],
-              selected: {_tipo},
-              onSelectionChanged: (s) => setState(() => _tipo = s.first),
+              selected: {_kind},
+              onSelectionChanged: (s) => setState(() => _kind = s.first),
             ),
             const SizedBox(height: 20),
-            DropdownButtonFormField<String>(
-              initialValue: _turma,
-              decoration: const InputDecoration(
-                labelText: 'Para quem?',
-                prefixIcon: Icon(Icons.groups_outlined),
-                border: OutlineInputBorder(),
-              ),
-              items: [
-                for (final turma in turmasMural)
-                  DropdownMenuItem(value: turma, child: Text(turma)),
-              ],
-              onChanged: (v) {
-                if (v != null) setState(() => _turma = v);
-              },
-            ),
-            const SizedBox(height: 16),
             TextFormField(
               controller: _tituloController,
               textCapitalization: TextCapitalization.sentences,
@@ -134,7 +185,7 @@ class _MuralPostFormScreenState extends State<MuralPostFormScreen> {
             const SizedBox(height: 16),
             TextFormField(
               controller: _textoController,
-              maxLines: 4,
+              maxLines: 5,
               textCapitalization: TextCapitalization.sentences,
               decoration: const InputDecoration(
                 labelText: 'Mensagem',
@@ -142,97 +193,93 @@ class _MuralPostFormScreenState extends State<MuralPostFormScreen> {
                 border: OutlineInputBorder(),
               ),
               validator: (v) => (v == null || v.trim().isEmpty)
-                  ? 'Escreva uma mensagem para as famílias.'
+                  ? 'Escreva a mensagem da publicação.'
                   : null,
             ),
-            const SizedBox(height: 24),
-            Text('Fotos', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 4),
-            Text(
-              'Nesta versão as fotos são ilustrativas (sem upload real).',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: scheme.onSurfaceVariant),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (var i = 0; i < _fotos.length; i++)
-                  SizedBox(
-                    width: 96,
-                    height: 96,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: FotoPlaceholder(foto: _fotos[i], iconSize: 28),
-                        ),
-                        Positioned(
-                          top: 2,
-                          right: 2,
-                          child: InkWell(
-                            onTap: () => setState(() => _fotos.removeAt(i)),
-                            child: const CircleAvatar(
-                              radius: 11,
-                              backgroundColor: Colors.black54,
-                              child: Icon(Icons.close,
-                                  size: 14, color: Colors.white),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                if (_fotos.length < _maxFotos)
-                  SizedBox(
-                    width: 96,
-                    height: 96,
-                    child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      onPressed: _adicionarFoto,
-                      child: const Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.add_a_photo_outlined),
-                          SizedBox(height: 4),
-                          Text('Adicionar', style: TextStyle(fontSize: 12)),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _localController,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: 'Local (opcional)',
+                prefixIcon: Icon(Icons.place_outlined),
+                border: OutlineInputBorder(),
+              ),
             ),
             const SizedBox(height: 16),
+            TextFormField(
+              controller: _horarioController,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: 'Horários / o que trazer (opcional)',
+                prefixIcon: Icon(Icons.schedule_outlined),
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 24),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.visibility_outlined),
+              title: const Text('Liberação'),
+              subtitle: Text(formatMuralDateTime(_releasedAt)),
+              trailing: TextButton(
+                onPressed: () => _pickDateTime(released: true),
+                child: const Text('Alterar'),
+              ),
+            ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Fixar no topo do mural'),
-              subtitle: const Text('Use para avisos importantes.'),
-              value: _fixado,
-              onChanged: (v) => setState(() => _fixado = v),
+              title: const Text('Efetividade igual à liberação'),
+              subtitle: const Text(
+                'Desative para ancorar o item em outra data na timeline.',
+              ),
+              value: _sameEffective,
+              onChanged: (v) => setState(() {
+                _sameEffective = v;
+                if (v) _effectiveAt = _releasedAt;
+              }),
             ),
-            const SizedBox(height: 16),
+            if (!_sameEffective)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.timeline),
+                title: const Text('Efetividade'),
+                subtitle: Text(formatMuralDateTime(_effectiveAt)),
+                trailing: TextButton(
+                  onPressed: () => _pickDateTime(released: false),
+                  child: const Text('Alterar'),
+                ),
+              ),
+            const SizedBox(height: 24),
             FilledButton(
-              onPressed: _publicando ? null : _publicar,
-              child: _publicando
+              onPressed: _salvando ? null : _salvar,
+              child: _salvando
                   ? const SizedBox(
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Publicar no mural'),
+                  : Text(editing ? 'Salvar alterações' : 'Publicar no mural'),
             ),
           ],
         ),
       ),
     );
   }
+}
+
+String formatMuralDateTime(DateTime value) {
+  final local = value.toLocal();
+  final d = local.day.toString().padLeft(2, '0');
+  final m = local.month.toString().padLeft(2, '0');
+  final h = local.hour.toString().padLeft(2, '0');
+  final min = local.minute.toString().padLeft(2, '0');
+  return '$d/$m/${local.year} $h:$min';
+}
+
+String formatMuralDate(DateTime value) {
+  final local = value.toLocal();
+  final d = local.day.toString().padLeft(2, '0');
+  final m = local.month.toString().padLeft(2, '0');
+  return '$d/$m/${local.year}';
 }
