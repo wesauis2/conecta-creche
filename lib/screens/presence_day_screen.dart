@@ -9,6 +9,7 @@ import '../presence/presence_open_guard.dart';
 import '../presence/presence_record.dart';
 import '../presence/presence_repository.dart';
 import '../users/user_profile.dart';
+import '../users/user_repository.dart';
 import 'children_screen.dart';
 import 'parecer_form_screen.dart';
 
@@ -48,6 +49,7 @@ class PresenceDayScreen extends StatefulWidget {
     required this.profile,
     required this.childRepository,
     required this.presenceRepository,
+    this.userRepository,
     this.appBarLeadingActions = const [],
     String? dayKey,
   }) : dayKey = dayKey ?? PresenceClock.todayDayKey();
@@ -55,6 +57,7 @@ class PresenceDayScreen extends StatefulWidget {
   final UserProfile profile;
   final ChildRepository childRepository;
   final PresenceRepository presenceRepository;
+  final UserRepository? userRepository;
 
   /// Extra actions rendered before "Crianças"/"Nova" (e.g. shortcuts to the
   /// user's profile) when this screen owns the app's only app bar.
@@ -397,6 +400,7 @@ class _PresenceDayScreenState extends State<PresenceDayScreen> {
         builder: (context) => ChildrenScreen(
           profile: widget.profile,
           childRepository: widget.childRepository,
+          userRepository: widget.userRepository,
         ),
       ),
     );

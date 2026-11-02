@@ -3,18 +3,26 @@ import 'package:flutter/material.dart';
 import '../presence/child.dart';
 import '../presence/child_repository.dart';
 import '../users/user_profile.dart';
+import '../users/user_repository.dart';
+import '../users/user_role.dart';
 
 /// Catálogo de crianças, separado da lista operacional de presença. See
-/// CONTEXT.md "Gestão de crianças" / "Inativação de criança".
+/// CONTEXT.md "Gestão de crianças" / "Inativação de criança" /
+/// "Vínculo criança↔responsável".
 class ChildrenScreen extends StatefulWidget {
   const ChildrenScreen({
     super.key,
     required this.profile,
     required this.childRepository,
+    this.userRepository,
   });
 
   final UserProfile profile;
   final ChildRepository childRepository;
+
+  /// Necessário para gestão+ vincular responsáveis; ausente em testes
+  /// focados só no catálogo.
+  final UserRepository? userRepository;
 
   @override
   State<ChildrenScreen> createState() => _ChildrenScreenState();
@@ -44,6 +52,52 @@ class _ChildrenScreenState extends State<ChildrenScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Não foi possível salvar o nome: $error')),
+        );
+      }
+    }
+  }
+
+  Future<void> _editResponsibles(Child child) async {
+    final userRepository = widget.userRepository;
+    if (userRepository == null) {
+      return;
+    }
+
+    final selected = await showDialog<Set<String>>(
+      context: context,
+      builder: (context) => _SelectResponsiblesDialog(
+        userRepository: userRepository,
+        initiallySelected: child.responsibleUids.toSet(),
+        childName: child.name,
+      ),
+    );
+
+    if (selected == null || !mounted) {
+      return;
+    }
+
+    final current = child.responsibleUids.toSet();
+    if (selected.length == current.length && selected.containsAll(current)) {
+      return;
+    }
+
+    try {
+      await widget.childRepository.setChildResponsibles(
+        childId: child.id,
+        responsibleUids: selected.toList(growable: false),
+        updatedBy: widget.profile.uid,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Responsáveis de ${child.name} atualizados.')),
+        );
+      }
+    } on Object catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Não foi possível salvar os responsáveis: $error'),
+          ),
         );
       }
     }
@@ -125,6 +179,8 @@ class _ChildrenScreenState extends State<ChildrenScreen> {
     }
 
     final canInactivate = widget.profile.role.canInactivateChild;
+    final canManageLinks =
+        canInactivate && widget.userRepository != null;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Crianças')),
@@ -172,16 +228,35 @@ class _ChildrenScreenState extends State<ChildrenScreen> {
             separatorBuilder: (_, _) => const Divider(height: 1),
             itemBuilder: (context, index) {
               final child = children[index];
+              final subtitleParts = <String>[
+                if (!child.active) 'Inativa',
+                if (canManageLinks)
+                  child.responsibleUids.isEmpty
+                      ? 'Sem responsáveis'
+                      : '${child.responsibleUids.length} '
+                          'responsável${child.responsibleUids.length == 1 ? '' : 'eis'}',
+              ];
               return ListTile(
                 title: Text(child.name),
-                subtitle: child.active ? null : const Text('Inativa'),
+                subtitle: subtitleParts.isEmpty
+                    ? null
+                    : Text(subtitleParts.join(' · ')),
                 leading: CircleAvatar(
                   child: Text(
                     child.name.isNotEmpty ? child.name[0].toUpperCase() : '?',
                   ),
                 ),
-                trailing: canInactivate
-                    ? IconButton(
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (canManageLinks)
+                      IconButton(
+                        tooltip: 'Responsáveis',
+                        onPressed: () => _editResponsibles(child),
+                        icon: const Icon(Icons.link),
+                      ),
+                    if (canInactivate)
+                      IconButton(
                         tooltip: child.active ? 'Inativar' : 'Reativar',
                         onPressed: () => child.active
                             ? _confirmInactivate(child)
@@ -191,8 +266,9 @@ class _ChildrenScreenState extends State<ChildrenScreen> {
                               ? Icons.block_outlined
                               : Icons.restore_outlined,
                         ),
-                      )
-                    : null,
+                      ),
+                  ],
+                ),
                 onTap: () => _editName(child),
               );
             },
@@ -240,6 +316,132 @@ class _EditNameDialogState extends State<_EditNameDialog> {
         ),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+          child: const Text('Salvar'),
+        ),
+      ],
+    );
+  }
+}
+
+class _SelectResponsiblesDialog extends StatefulWidget {
+  const _SelectResponsiblesDialog({
+    required this.userRepository,
+    required this.initiallySelected,
+    required this.childName,
+  });
+
+  final UserRepository userRepository;
+  final Set<String> initiallySelected;
+  final String childName;
+
+  @override
+  State<_SelectResponsiblesDialog> createState() =>
+      _SelectResponsiblesDialogState();
+}
+
+class _SelectResponsiblesDialogState extends State<_SelectResponsiblesDialog> {
+  late final Set<String> _selected = {...widget.initiallySelected};
+  String _query = '';
+
+  String _label(UserProfile user) {
+    final name = user.displayName?.trim();
+    if (name != null && name.isNotEmpty) {
+      return name;
+    }
+    return user.email ?? user.uid;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('Responsáveis de ${widget.childName}'),
+      content: SizedBox(
+        width: double.maxFinite,
+        height: 360,
+        child: Column(
+          children: [
+            TextField(
+              decoration: const InputDecoration(
+                labelText: 'Buscar',
+                hintText: 'Nome ou e-mail',
+                prefixIcon: Icon(Icons.search),
+              ),
+              onChanged: (value) => setState(() => _query = value),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: StreamBuilder<List<UserProfile>>(
+                stream: widget.userRepository.watchManagedUsers(),
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return Text(
+                      'Não foi possível carregar os responsáveis.',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    );
+                  }
+                  if (!snapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  final query = _query.trim().toLowerCase();
+                  final responsaveis = snapshot.data!
+                      .where((user) => user.role == UserRole.responsavel)
+                      .where((user) {
+                        if (query.isEmpty) {
+                          return true;
+                        }
+                        final name = (user.displayName ?? '').toLowerCase();
+                        final email = (user.email ?? '').toLowerCase();
+                        return name.contains(query) || email.contains(query);
+                      })
+                      .toList(growable: false);
+
+                  if (responsaveis.isEmpty) {
+                    return const Center(
+                      child: Text(
+                        'Nenhum usuário com papel Responsável.',
+                        textAlign: TextAlign.center,
+                      ),
+                    );
+                  }
+
+                  return ListView.builder(
+                    itemCount: responsaveis.length,
+                    itemBuilder: (context, index) {
+                      final user = responsaveis[index];
+                      final checked = _selected.contains(user.uid);
+                      return CheckboxListTile(
+                        value: checked,
+                        title: Text(_label(user)),
+                        subtitle: user.email != null ? Text(user.email!) : null,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        onChanged: (value) {
+                          setState(() {
+                            if (value == true) {
+                              _selected.add(user.uid);
+                            } else {
+                              _selected.remove(user.uid);
+                            }
+                          });
+                        },
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_selected),
           child: const Text('Salvar'),
         ),
       ],
