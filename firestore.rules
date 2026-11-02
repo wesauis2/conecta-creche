@@ -154,5 +154,15 @@ service cloud.firestore {
 
       allow delete: if isAdmin();
     }
+
+    // `form_questions` (CONTEXT.md "Formulário configurável").
+    // Intenção: read Cuidador+; write gestão+. Durante a leva: rules
+    // permissivas (signed-in) para não bloquear desenvolvimento; enxugar
+    // no fim (ver docs/requisitos/papeis-acesso.md).
+    match /form_questions/{questionId} {
+      allow get, list: if signedIn();
+      allow create, update: if signedIn();
+      allow delete: if false;
+    }
   }
 }

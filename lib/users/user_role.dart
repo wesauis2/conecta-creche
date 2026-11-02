@@ -32,6 +32,10 @@ enum UserRole {
   /// "Inativação de criança".
   bool get canInactivateChild => rank >= UserRole.gestao.rank;
 
+  /// Gestão+ configures the shared form_questions template. See CONTEXT.md
+  /// "Formulário configurável" and docs/requisitos/formularios-configuraveis.md.
+  bool get canConfigureForms => rank >= UserRole.gestao.rank;
+
   /// Only admin can alter arrivedAt/departedAt after creation or hard-delete
   /// a presence record. See CONTEXT.md "Chegada" / "Saída".
   bool get canAdminPresence => rank >= UserRole.admin.rank;

@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'app.dart';
 import 'auth/google_auth_service.dart';
 import 'firebase/firebase_bootstrap.dart';
+import 'forms/form_question_repository.dart';
 import 'presence/child_repository.dart';
 import 'presence/presence_repository.dart';
 import 'users/user_repository.dart';
+
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,6 +31,7 @@ Future<void> main() async {
       final userRepository = UserRepository();
       final childRepository = ChildRepository();
       final presenceRepository = PresenceRepository();
+      final formQuestionRepository = FormQuestionRepository();
       await authService.ensureGoogleSignInInitialized();
       runApp(
         ConectaCrecheApp(
@@ -36,6 +39,7 @@ Future<void> main() async {
           userRepository: userRepository,
           childRepository: childRepository,
           presenceRepository: presenceRepository,
+          formQuestionRepository: formQuestionRepository,
         ),
       );
   }
