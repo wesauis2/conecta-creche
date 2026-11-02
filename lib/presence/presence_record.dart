@@ -75,19 +75,20 @@ class PresenceRecord {
     };
   }
 
-  /// Fields updated when a saída closes an open record with its parecer.
+  /// Fields updated when a saída closes an open record.
   ///
-  /// Never touches `dayKey`/`arrivedAt`/`childId` (immutable outside admin
-  /// flows, out of scope for this ticket).
+  /// [parecer] is optional legacy compat; prefer form-driven answers with
+  /// `recordedPhase=saida` (see PresenceRepository.registerDeparture).
+  /// Never touches `dayKey`/`arrivedAt`/`childId` (immutable outside admin).
   static Map<String, dynamic> toDepartureMap({
     required DateTime departedAt,
-    required Parecer parecer,
     required String updatedBy,
+    Parecer? parecer,
   }) {
     return {
       'departedAt': Timestamp.fromDate(departedAt),
       'isOpen': false,
-      'parecer': parecer.toMap(),
+      if (parecer != null) 'parecer': parecer.toMap(),
       'updatedAt': FieldValue.serverTimestamp(),
       'updatedBy': updatedBy,
     };

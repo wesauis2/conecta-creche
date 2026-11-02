@@ -114,10 +114,11 @@ service cloud.firestore {
     }
 
     // `presence_records` (CONTEXT.md "Registro de presença" / "Chegada" /
-    // "Saída" / "Parecer"). Cuidador+ create chegada, close with parecer and
-    // edit parecer afterwards; `childId`/`dayKey`/`arrivedAt` and an already
-    // set `departedAt` are immutable outside admin; only admin can alter
-    // arrivedAt/departedAt or hard-delete.
+    // "Saída"). Cuidador+ create chegada, close (form answers e/ou parecer
+    // legado) e edita parecer depois; `childId`/`dayKey`/`arrivedAt` e um
+    // `departedAt` já definido são imutáveis fora do admin. Durante a leva:
+    // update de fechamento/parecer permissivo para Cuidador+ (sem exigir
+    // parecer); enxugar no fim da leva.
     function presenceCoreFieldsUnchanged() {
       return request.resource.data.childId == resource.data.childId
         && request.resource.data.dayKey == resource.data.dayKey
@@ -147,6 +148,7 @@ service cloud.firestore {
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.updatedBy == request.auth.uid;
 
+      // Leva: Cuidador+ pode fechar sem parecer (answers na subcoleção).
       allow update: if isAdmin()
         || (isCaregiverPlus()
             && presenceCoreFieldsUnchanged()

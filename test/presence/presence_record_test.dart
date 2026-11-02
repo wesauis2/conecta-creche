@@ -83,5 +83,15 @@ void main() {
       expect(map.containsKey('childId'), isFalse);
       expect(map.containsKey('arrivedAt'), isFalse);
     });
+
+    test('omits parecer when closing with form-driven answers only', () {
+      final map = PresenceRecord.toDepartureMap(
+        departedAt: DateTime.utc(2026, 8, 30, 18),
+        updatedBy: 'uid-2',
+      );
+
+      expect(map['isOpen'], isFalse);
+      expect(map.containsKey('parecer'), isFalse);
+    });
   });
 }
