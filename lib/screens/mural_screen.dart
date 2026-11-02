@@ -1,16 +1,26 @@
 import 'package:flutter/material.dart';
 
+import '../mural/mural_feed.dart';
 import '../mural/mural_post.dart';
 import '../mural/mural_repository.dart';
+import '../presence/child_repository.dart';
+import '../presence/presence_repository.dart';
+import '../mural/notification_repository.dart';
+import '../users/user_role.dart';
 import 'mural_post_form_screen.dart';
 
-/// Timeline do mural ordenada por efetividade. Gestão+ publica/edita;
-/// demais papéis só leem itens já liberados.
+/// Timeline do mural ordenada por efetividade. Mistura posts liberados,
+/// notificações registradas e (para responsável) presenças/incidentes das
+/// crianças vinculadas. Gestão+ publica/edita posts oficiais.
 class MuralScreen extends StatefulWidget {
   const MuralScreen({
     super.key,
     required this.repository,
     required this.authorUid,
+    this.role = UserRole.convidado,
+    this.notificationRepository,
+    this.childRepository,
+    this.presenceRepository,
     this.podePublicar = false,
     this.mostrarAppBar = true,
     this.saudacao,
@@ -18,6 +28,10 @@ class MuralScreen extends StatefulWidget {
 
   final MuralPostsRepository repository;
   final String authorUid;
+  final UserRole role;
+  final NotificationsRepository? notificationRepository;
+  final ChildRepository? childRepository;
+  final PresenceRepository? presenceRepository;
   final bool podePublicar;
   final bool mostrarAppBar;
   final String? saudacao;
@@ -29,7 +43,7 @@ class MuralScreen extends StatefulWidget {
 class _MuralScreenState extends State<MuralScreen> {
   static const int _pageSize = 20;
 
-  final List<MuralPost> _posts = <MuralPost>[];
+  final List<MuralFeedItem> _items = <MuralFeedItem>[];
   final Set<String> _expandedIds = <String>{};
   final ScrollController _scrollController = ScrollController();
 
@@ -37,7 +51,23 @@ class _MuralScreenState extends State<MuralScreen> {
   bool _loadingMore = false;
   bool _hasMore = true;
   String? _error;
-  MuralPostKind? _filtro;
+  MuralFeedItemKind? _filtroTipo;
+  MuralPostKind? _filtroPostKind;
+
+  MuralFeedLoader? get _feedLoader {
+    final notifications = widget.notificationRepository;
+    final children = widget.childRepository;
+    final presence = widget.presenceRepository;
+    if (notifications == null || children == null || presence == null) {
+      return null;
+    }
+    return MuralFeedLoader(
+      muralRepository: widget.repository,
+      notificationRepository: notifications,
+      childRepository: children,
+      presenceRepository: presence,
+    );
+  }
 
   @override
   void initState() {
@@ -62,6 +92,71 @@ class _MuralScreenState extends State<MuralScreen> {
     }
   }
 
+  Future<List<MuralFeedItem>> _loadPage({
+    int pageSize = _pageSize,
+    DateTime? startAfterEffectiveAt,
+    String? startAfterId,
+  }) async {
+    final loader = _feedLoader;
+    if (loader != null) {
+      return loader.load(
+        uid: widget.authorUid,
+        role: widget.role,
+        pageSize: pageSize,
+        startAfterEffectiveAt: startAfterEffectiveAt,
+        startAfterId: startAfterId,
+      );
+    }
+
+    // Fallback legado (previews/dev sem repos extras): só posts.
+    if (widget.podePublicar) {
+      final all =
+          await widget.repository.watchPosts(includeUnreleased: true).first;
+      Iterable<MuralPost> page = all;
+      if (startAfterEffectiveAt != null && startAfterId != null) {
+        page = all.where((post) {
+          final cmp = post.effectiveAt.compareTo(startAfterEffectiveAt);
+          if (cmp != 0) return cmp < 0;
+          return 'post:${post.id}'.compareTo(startAfterId) < 0;
+        });
+      }
+      return page
+          .take(pageSize)
+          .map(
+            (post) => MuralFeedItem(
+              id: 'post:${post.id}',
+              kind: MuralFeedItemKind.post,
+              effectiveAt: post.effectiveAt,
+              title: post.title,
+              body: post.body,
+              post: post,
+              showUnreleasedBadge: !post.isReleased(),
+            ),
+          )
+          .toList(growable: false);
+    }
+
+    final posts = await widget.repository.listVisiblePosts(
+      pageSize: pageSize,
+      startAfterEffectiveAt: startAfterEffectiveAt,
+      startAfterId: startAfterId?.startsWith('post:') == true
+          ? startAfterId!.substring('post:'.length)
+          : startAfterId,
+    );
+    return posts
+        .map(
+          (post) => MuralFeedItem(
+            id: 'post:${post.id}',
+            kind: MuralFeedItemKind.post,
+            effectiveAt: post.effectiveAt,
+            title: post.title,
+            body: post.body,
+            post: post,
+          ),
+        )
+        .toList(growable: false);
+  }
+
   Future<void> _reload() async {
     setState(() {
       _loading = true;
@@ -69,12 +164,10 @@ class _MuralScreenState extends State<MuralScreen> {
       _hasMore = true;
     });
     try {
-      final page = widget.podePublicar
-          ? await _listForWriter(pageSize: _pageSize)
-          : await widget.repository.listVisiblePosts(pageSize: _pageSize);
+      final page = await _loadPage(pageSize: _pageSize);
       if (!mounted) return;
       setState(() {
-        _posts
+        _items
           ..clear()
           ..addAll(page);
         _hasMore = page.length >= _pageSize;
@@ -89,44 +182,19 @@ class _MuralScreenState extends State<MuralScreen> {
     }
   }
 
-  Future<List<MuralPost>> _listForWriter({
-    int pageSize = 20,
-    DateTime? startAfterEffectiveAt,
-    String? startAfterId,
-  }) async {
-    // Gestão vê agendados também; pagina no client como a lista visível.
-    final all =
-        await widget.repository.watchPosts(includeUnreleased: true).first;
-    Iterable<MuralPost> page = all;
-    if (startAfterEffectiveAt != null && startAfterId != null) {
-      page = all.where((post) {
-        final cmp = post.effectiveAt.compareTo(startAfterEffectiveAt);
-        if (cmp != 0) return cmp < 0;
-        return post.id.compareTo(startAfterId) < 0;
-      });
-    }
-    return page.take(pageSize).toList(growable: false);
-  }
-
   Future<void> _loadMore() async {
-    if (_posts.isEmpty || _loadingMore || !_hasMore) return;
+    if (_items.isEmpty || _loadingMore || !_hasMore) return;
     setState(() => _loadingMore = true);
-    final last = _posts.last;
+    final last = _items.last;
     try {
-      final next = widget.podePublicar
-          ? await _listForWriter(
-              pageSize: _pageSize,
-              startAfterEffectiveAt: last.effectiveAt,
-              startAfterId: last.id,
-            )
-          : await widget.repository.listVisiblePosts(
-              pageSize: _pageSize,
-              startAfterEffectiveAt: last.effectiveAt,
-              startAfterId: last.id,
-            );
+      final next = await _loadPage(
+        pageSize: _pageSize,
+        startAfterEffectiveAt: last.effectiveAt,
+        startAfterId: last.id,
+      );
       if (!mounted) return;
       setState(() {
-        _posts.addAll(next);
+        _items.addAll(next);
         _hasMore = next.length >= _pageSize;
         _loadingMore = false;
       });
@@ -163,18 +231,41 @@ class _MuralScreenState extends State<MuralScreen> {
     }
   }
 
-  List<MuralPost> get _visiveis {
-    if (_filtro == null) return _posts;
-    return _posts.where((p) => p.kind == _filtro).toList();
+  List<MuralFeedItem> get _visiveis {
+    return _items.where((item) {
+      if (_filtroTipo != null && item.kind != _filtroTipo) return false;
+      if (_filtroPostKind != null) {
+        if (item.kind != MuralFeedItemKind.post) return false;
+        if (item.post?.kind != _filtroPostKind) return false;
+      }
+      return true;
+    }).toList();
   }
 
-  Widget _chip(String label, MuralPostKind? kind) {
+  Widget _tipoChip(String label, MuralFeedItemKind? kind) {
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: ChoiceChip(
         label: Text(label),
-        selected: _filtro == kind,
-        onSelected: (_) => setState(() => _filtro = kind),
+        selected: _filtroTipo == kind && _filtroPostKind == null,
+        onSelected: (_) => setState(() {
+          _filtroTipo = kind;
+          _filtroPostKind = null;
+        }),
+      ),
+    );
+  }
+
+  Widget _postKindChip(MuralPostKind kind) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        label: Text(kind.label),
+        selected: _filtroPostKind == kind,
+        onSelected: (_) => setState(() {
+          _filtroTipo = MuralFeedItemKind.post;
+          _filtroPostKind = kind;
+        }),
       ),
     );
   }
@@ -183,6 +274,7 @@ class _MuralScreenState extends State<MuralScreen> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final visiveis = _visiveis;
+    final showChildFilters = widget.role == UserRole.responsavel;
 
     return Scaffold(
       appBar: widget.mostrarAppBar ? AppBar(title: const Text('Mural')) : null,
@@ -248,9 +340,24 @@ class _MuralScreenState extends State<MuralScreen> {
                               scrollDirection: Axis.horizontal,
                               child: Row(
                                 children: [
-                                  _chip('Tudo', null),
+                                  _tipoChip('Tudo', null),
+                                  _tipoChip('Posts', MuralFeedItemKind.post),
+                                  _tipoChip(
+                                    'Avisos',
+                                    MuralFeedItemKind.notification,
+                                  ),
+                                  if (showChildFilters) ...[
+                                    _tipoChip(
+                                      'Presença',
+                                      MuralFeedItemKind.presence,
+                                    ),
+                                    _tipoChip(
+                                      'Incidentes',
+                                      MuralFeedItemKind.incident,
+                                    ),
+                                  ],
                                   for (final kind in MuralPostKind.values)
-                                    _chip(kind.label, kind),
+                                    _postKindChip(kind),
                                 ],
                               ),
                             ),
@@ -284,25 +391,25 @@ class _MuralScreenState extends State<MuralScreen> {
                         return const SizedBox.shrink();
                       }
 
-                      final post = visiveis[postIndex];
-                      final expanded = _expandedIds.contains(post.id);
+                      final item = visiveis[postIndex];
+                      final expanded = _expandedIds.contains(item.id);
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 12),
-                        child: _MuralPostTile(
-                          key: ValueKey(post.id),
-                          post: post,
+                        child: _MuralFeedTile(
+                          key: ValueKey(item.id),
+                          item: item,
                           expanded: expanded,
-                          showUnreleasedBadge: widget.podePublicar &&
-                              !post.isReleased(),
                           onToggle: () => setState(() {
                             if (expanded) {
-                              _expandedIds.remove(post.id);
+                              _expandedIds.remove(item.id);
                             } else {
-                              _expandedIds.add(post.id);
+                              _expandedIds.add(item.id);
                             }
                           }),
-                          onEdit: widget.podePublicar
-                              ? () => _novaPublicacao(existing: post)
+                          onEdit: widget.podePublicar &&
+                                  item.kind == MuralFeedItemKind.post &&
+                                  item.post != null
+                              ? () => _novaPublicacao(existing: item.post)
                               : null,
                         ),
                       );
@@ -320,26 +427,40 @@ class _MuralScreenState extends State<MuralScreen> {
   }
 }
 
-class _MuralPostTile extends StatelessWidget {
-  const _MuralPostTile({
+class _MuralFeedTile extends StatelessWidget {
+  const _MuralFeedTile({
     super.key,
-    required this.post,
+    required this.item,
     required this.expanded,
     required this.onToggle,
     this.onEdit,
-    this.showUnreleasedBadge = false,
   });
 
-  final MuralPost post;
+  final MuralFeedItem item;
   final bool expanded;
   final VoidCallback onToggle;
   final VoidCallback? onEdit;
-  final bool showUnreleasedBadge;
+
+  IconData get _icon => switch (item.kind) {
+        MuralFeedItemKind.post =>
+          item.post?.kind.icon ?? Icons.campaign_outlined,
+        MuralFeedItemKind.notification => Icons.notifications_outlined,
+        MuralFeedItemKind.presence => Icons.child_care_outlined,
+        MuralFeedItemKind.incident => Icons.report_problem_outlined,
+      };
+
+  String get _kindLabel => switch (item.kind) {
+        MuralFeedItemKind.post => item.post?.kind.label ?? 'Publicação',
+        MuralFeedItemKind.notification => 'Aviso',
+        MuralFeedItemKind.presence => 'Presença',
+        MuralFeedItemKind.incident => 'Incidente',
+      };
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final post = item.post;
 
     return Card(
       margin: EdgeInsets.zero,
@@ -353,10 +474,10 @@ class _MuralPostTile extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Icon(post.kind.icon, size: 18, color: scheme.primary),
+                  Icon(_icon, size: 18, color: scheme.primary),
                   const SizedBox(width: 6),
                   Text(
-                    post.kind.label,
+                    _kindLabel,
                     style: textTheme.labelMedium?.copyWith(
                       color: scheme.primary,
                       fontWeight: FontWeight.w600,
@@ -364,19 +485,17 @@ class _MuralPostTile extends StatelessWidget {
                   ),
                   const Spacer(),
                   Text(
-                    formatMuralDate(post.effectiveAt),
+                    formatMuralDate(item.effectiveAt),
                     style: textTheme.bodySmall
                         ?.copyWith(color: scheme.onSurfaceVariant),
                   ),
                   Icon(
-                    expanded
-                        ? Icons.expand_less
-                        : Icons.expand_more,
+                    expanded ? Icons.expand_less : Icons.expand_more,
                     color: scheme.onSurfaceVariant,
                   ),
                 ],
               ),
-              if (showUnreleasedBadge) ...[
+              if (item.showUnreleasedBadge && post != null) ...[
                 const SizedBox(height: 8),
                 Text(
                   'Agendado · libera em ${formatMuralDateTime(post.releasedAt)}',
@@ -387,14 +506,14 @@ class _MuralPostTile extends StatelessWidget {
               ],
               const SizedBox(height: 8),
               Text(
-                post.title,
+                item.title,
                 style: textTheme.titleMedium
                     ?.copyWith(fontWeight: FontWeight.w600),
               ),
               if (!expanded) ...[
                 const SizedBox(height: 4),
                 Text(
-                  post.body,
+                  item.body,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: textTheme.bodyMedium
@@ -402,43 +521,45 @@ class _MuralPostTile extends StatelessWidget {
                 ),
               ] else ...[
                 const SizedBox(height: 8),
-                Text(post.body),
-                if (post.location != null && post.location!.isNotEmpty) ...[
+                Text(item.body),
+                if (post != null) ...[
+                  if (post.location != null && post.location!.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.place_outlined,
+                            size: 16, color: scheme.onSurfaceVariant),
+                        const SizedBox(width: 6),
+                        Expanded(child: Text(post.location!)),
+                      ],
+                    ),
+                  ],
+                  if (post.scheduleText != null &&
+                      post.scheduleText!.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.schedule_outlined,
+                            size: 16, color: scheme.onSurfaceVariant),
+                        const SizedBox(width: 6),
+                        Expanded(child: Text(post.scheduleText!)),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 12),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.place_outlined,
-                          size: 16, color: scheme.onSurfaceVariant),
-                      const SizedBox(width: 6),
-                      Expanded(child: Text(post.location!)),
-                    ],
+                  Text(
+                    'Liberação: ${formatMuralDateTime(post.releasedAt)}',
+                    style: textTheme.bodySmall
+                        ?.copyWith(color: scheme.onSurfaceVariant),
+                  ),
+                  Text(
+                    'Efetividade: ${formatMuralDateTime(post.effectiveAt)}',
+                    style: textTheme.bodySmall
+                        ?.copyWith(color: scheme.onSurfaceVariant),
                   ),
                 ],
-                if (post.scheduleText != null &&
-                    post.scheduleText!.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.schedule_outlined,
-                          size: 16, color: scheme.onSurfaceVariant),
-                      const SizedBox(width: 6),
-                      Expanded(child: Text(post.scheduleText!)),
-                    ],
-                  ),
-                ],
-                const SizedBox(height: 12),
-                Text(
-                  'Liberação: ${formatMuralDateTime(post.releasedAt)}',
-                  style: textTheme.bodySmall
-                      ?.copyWith(color: scheme.onSurfaceVariant),
-                ),
-                Text(
-                  'Efetividade: ${formatMuralDateTime(post.effectiveAt)}',
-                  style: textTheme.bodySmall
-                      ?.copyWith(color: scheme.onSurfaceVariant),
-                ),
                 if (onEdit != null) ...[
                   const SizedBox(height: 8),
                   Align(
