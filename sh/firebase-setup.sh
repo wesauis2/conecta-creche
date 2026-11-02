@@ -231,8 +231,8 @@ finish_wizard() {
   printf '\n'
 }
 
-TOTAL_STAGES=6
-TOTAL_MINUTES=23
+TOTAL_STAGES=8
+TOTAL_MINUTES=30
 
 pause() {
   printf '  %s%s%s ' "$DIM" "${1:-Press Enter para continuar}" "$RESET"
@@ -313,7 +313,54 @@ if [[ -f "$REPO_ROOT/android/app/google-services.json" ]]; then
 fi
 note "iOS (ios/Runner/GoogleService-Info.plist) é opcional esta semana — veja docs/credentials.md"
 
-# ── 5. FlutterFire configure (opcional) ─────────────────────────────────
+# ── 5. Cloud Messaging (FCM) ──────────────────────────────────────────────
+stage "Cloud Messaging (FCM)" 4
+say "Ative o Firebase Cloud Messaging para push no Android (RF0004 / notificações)."
+say "Referência: docs/requisitos/notificacoes-push.md"
+open_url "$(firebase_project_url "settings/cloudmessaging")"
+step "No console: Engrenagem → Configurações do projeto → Cloud Messaging (aba)."
+step "Confirme que Cloud Messaging API (V1) está habilitada (ou ative se o console pedir)."
+step "Com o app Android já registrado ($ANDROID_PACKAGE), FCM usa o mesmo google-services.json."
+step "Se você acabou de ativar Messaging ou mudou o app: baixe de novo o google-services.json."
+note "Destino: android/app/google-services.json (gitignored) — só se baixou de novo."
+ask GOOGLE_SERVICES_FCM_SRC "Caminho do google-services.json atualizado (vazio para manter o atual):"
+if [[ -n "${GOOGLE_SERVICES_FCM_SRC:-}" ]]; then
+  if [[ -f "$GOOGLE_SERVICES_FCM_SRC" ]]; then
+    write_credential_file "$REPO_ROOT/android/app/google-services.json" "$GOOGLE_SERVICES_FCM_SRC"
+  else
+    SKIPPED+=("atualizar google-services.json após FCM")
+    warn "Arquivo não encontrado: $GOOGLE_SERVICES_FCM_SRC"
+  fi
+elif [[ -f "$REPO_ROOT/android/app/google-services.json" ]]; then
+  note "android/app/google-services.json já existe — mantido (ok se o app Android já estava registrado)."
+else
+  SKIPPED+=("baixar google-services.json (necessário para FCM no Android)")
+  warn "Sem google-services.json — volte ao estágio do app Android ou baixe agora."
+fi
+note "Este wizard NÃO roda firebase deploy — regras/Functions ficam para passos manuais depois."
+pause "Cloud Messaging conferido no console?"
+
+# ── 6. Canal Android 8+ e plano Spark ─────────────────────────────────────
+stage "Canal Android 8+ e plano Spark" 3
+say "Android 8+ exige um canal de notificação; o app cria o canal em runtime (código)."
+step "No app (depois, com firebase_messaging): criar NotificationChannel com id estável (ex.: conecta_creche_default)."
+step "Use importância adequada (alta para incidentes); título/descrição em pt-BR."
+step "Sem canal: push pode chegar silencioso ou sumir na bandeja em Android 8+."
+note "iOS / APNs: fora do escopo deste wizard (Android primeiro)."
+printf '\n'
+say "Plano Firebase (lab / Spark):"
+note "• FCM (Cloud Messaging) funciona no plano Spark (free) — cotas no-cost; NÃO exige Blaze."
+note "• Cloud Storage for Firebase exige plano Blaze (billing) — indisponível no Spark."
+note "• Anexos desta leva ficam no Firestore (bytes/base64 no documento), não no Storage."
+note "• Não faça upgrade para Blaze só por causa de push."
+printf '\n'
+say "Envio server-side no lab (opcional, sem deploy automático):"
+note "• Caminho mínimo: Admin SDK num script local com service account (console → Contas de serviço)."
+note "• Cloud Functions / Callable: opcional e tipicamente Blaze — só se o lab precisar; documentar depois."
+note "• Preferir o caminho que não force Blaze; sem FCM configurado o app só usa o feed notifications/."
+pause "Notas de canal e Spark vs Blaze lidas?"
+
+# ── 7. FlutterFire configure (opcional) ─────────────────────────────────
 stage "FlutterFire — firebase_options.dart (opcional)" 2
 say "No Android desta semana, só o google-services.json já basta para build e execução."
 say "Este passo gera lib/firebase_options.dart — útil no futuro (iOS/web), mas não é obrigatório."
@@ -323,6 +370,7 @@ fi
 note "flutterfire configure exige firebase login. Sem CLI logado, ignore este estágio."
 step "Opcional: dart pub global activate flutterfire_cli && firebase login"
 step "Opcional: flutterfire configure --project=<id> --platforms=android --out=lib/firebase_options.dart"
+note "Não use firebase deploy neste wizard — só configure/options se quiser o arquivo Dart."
 if command -v flutterfire >/dev/null 2>&1 && [[ -n "${FIREBASE_PROJECT_ID:-}" ]]; then
   if confirm "Executar flutterfire configure agora (opcional)"; then
     if flutterfire configure \
@@ -344,7 +392,7 @@ else
   note "Sem flutterfire/login: pule. android/app/google-services.json é suficiente para flutter run."
 fi
 
-# ── 6. Verificar gitignore ────────────────────────────────────────────────
+# ── 8. Verificar gitignore ────────────────────────────────────────────────
 stage "Verificar .gitignore" 2
 say "Confirmamos que credenciais não entram no git."
 note "Referência: docs/credentials.md"
