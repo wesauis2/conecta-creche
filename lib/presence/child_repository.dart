@@ -13,6 +13,14 @@ class ChildRepository {
   CollectionReference<Map<String, dynamic>> get _children =>
       _firestore.collection('children');
 
+  /// Lê uma criança por id (ou `null` se inexistente).
+  Future<Child?> getChild(String childId) async {
+    final snap = await _children.doc(childId).get();
+    final data = snap.data();
+    if (data == null) return null;
+    return Child.fromFirestore(snap.id, data);
+  }
+
   Future<String> createChild({
     required String name,
     required String createdBy,

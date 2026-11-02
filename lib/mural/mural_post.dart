@@ -42,6 +42,7 @@ class MuralPost {
     required this.kind,
     required this.releasedAt,
     required this.effectiveAt,
+    this.requiresNotification = false,
     this.createdAt,
     this.updatedAt,
     this.createdBy,
@@ -56,6 +57,11 @@ class MuralPost {
   final MuralPostKind kind;
   final DateTime releasedAt;
   final DateTime effectiveAt;
+
+  /// Se true e `effectiveAt <= now` no create, emite notificação/FCM.
+  /// Ver docs/requisitos/notificacoes-push.md.
+  final bool requiresNotification;
+
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final String? createdBy;
@@ -83,6 +89,7 @@ class MuralPost {
       kind: MuralPostKind.fromFirestore(data['kind'] as String?),
       releasedAt: released,
       effectiveAt: effective,
+      requiresNotification: data['requiresNotification'] as bool? ?? false,
       createdAt: _readDate(data['createdAt']),
       updatedAt: _readDate(data['updatedAt']),
       createdBy: data['createdBy'] as String?,

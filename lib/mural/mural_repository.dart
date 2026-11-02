@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
+import '../fcm/notification_dispatch_service.dart';
 import 'mural_post.dart';
 
 /// Contrato do mural (timeline por efetividade). Ver CONTEXT.md "Mural".
@@ -13,6 +15,7 @@ abstract class MuralPostsRepository {
     required String createdBy,
     DateTime? releasedAt,
     DateTime? effectiveAt,
+    bool requiresNotification = false,
     String? location,
     String? scheduleText,
   });
@@ -25,6 +28,7 @@ abstract class MuralPostsRepository {
     MuralPostKind? kind,
     DateTime? releasedAt,
     DateTime? effectiveAt,
+    bool? requiresNotification,
     String? location,
     String? scheduleText,
     bool clearLocation = false,
@@ -48,16 +52,21 @@ abstract class MuralPostsRepository {
 
 /// Acesso Firestore a `mural_posts`. Ver docs/requisitos/mural.md.
 class MuralRepository implements MuralPostsRepository {
-  MuralRepository({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+  MuralRepository({
+    FirebaseFirestore? firestore,
+    NotificationDispatchService? notificationDispatch,
+  })  : _firestore = firestore ?? FirebaseFirestore.instance,
+        _notificationDispatch = notificationDispatch;
 
   final FirebaseFirestore _firestore;
+  final NotificationDispatchService? _notificationDispatch;
 
   CollectionReference<Map<String, dynamic>> get _posts =>
       _firestore.collection('mural_posts');
 
   /// Cria publicação. Se [effectiveAt] for omitido, copia [releasedAt]
   /// (ou "agora" quando ambos omitidos — publicação imediata).
+  /// Com [requiresNotification] e efetivo agora: grava feed + tenta FCM.
   @override
   Future<String> createPost({
     required String title,
@@ -66,6 +75,7 @@ class MuralRepository implements MuralPostsRepository {
     required String createdBy,
     DateTime? releasedAt,
     DateTime? effectiveAt,
+    bool requiresNotification = false,
     String? location,
     String? scheduleText,
   }) async {
@@ -84,6 +94,7 @@ class MuralRepository implements MuralPostsRepository {
       'updatedBy': createdBy,
       'releasedAt': Timestamp.fromDate(released),
       'effectiveAt': Timestamp.fromDate(effective),
+      'requiresNotification': requiresNotification,
     };
     if (location != null && location.trim().isNotEmpty) {
       payload['location'] = location.trim();
@@ -93,6 +104,23 @@ class MuralRepository implements MuralPostsRepository {
     }
 
     final docRef = await _posts.add(payload);
+
+    final dispatch = _notificationDispatch;
+    if (dispatch != null && requiresNotification) {
+      try {
+        await dispatch.dispatchMuralPost(
+          postId: docRef.id,
+          title: title,
+          body: body,
+          effectiveAt: effective,
+          requiresNotification: true,
+          asOf: now,
+        );
+      } on Object catch (error) {
+        debugPrint('Mural: disparo de notificação falhou: $error');
+      }
+    }
+
     return docRef.id;
   }
 
@@ -106,6 +134,7 @@ class MuralRepository implements MuralPostsRepository {
     MuralPostKind? kind,
     DateTime? releasedAt,
     DateTime? effectiveAt,
+    bool? requiresNotification,
     String? location,
     String? scheduleText,
     bool clearLocation = false,
@@ -123,6 +152,9 @@ class MuralRepository implements MuralPostsRepository {
     }
     if (effectiveAt != null) {
       fields['effectiveAt'] = Timestamp.fromDate(effectiveAt);
+    }
+    if (requiresNotification != null) {
+      fields['requiresNotification'] = requiresNotification;
     }
     if (clearLocation) {
       fields['location'] = FieldValue.delete();
@@ -237,6 +269,7 @@ class MemoryMuralRepository implements MuralPostsRepository {
     required String createdBy,
     DateTime? releasedAt,
     DateTime? effectiveAt,
+    bool requiresNotification = false,
     String? location,
     String? scheduleText,
   }) async {
@@ -252,6 +285,7 @@ class MemoryMuralRepository implements MuralPostsRepository {
         kind: kind,
         releasedAt: released,
         effectiveAt: effective,
+        requiresNotification: requiresNotification,
         createdAt: now,
         updatedAt: now,
         createdBy: createdBy,
@@ -273,6 +307,7 @@ class MemoryMuralRepository implements MuralPostsRepository {
     MuralPostKind? kind,
     DateTime? releasedAt,
     DateTime? effectiveAt,
+    bool? requiresNotification,
     String? location,
     String? scheduleText,
     bool clearLocation = false,
@@ -288,6 +323,8 @@ class MemoryMuralRepository implements MuralPostsRepository {
       kind: kind ?? current.kind,
       releasedAt: releasedAt ?? current.releasedAt,
       effectiveAt: effectiveAt ?? current.effectiveAt,
+      requiresNotification:
+          requiresNotification ?? current.requiresNotification,
       createdAt: current.createdAt,
       updatedAt: DateTime.now(),
       createdBy: current.createdBy,

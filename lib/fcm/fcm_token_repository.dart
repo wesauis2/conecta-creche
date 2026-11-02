@@ -17,6 +17,9 @@ abstract class FcmTokensRepository {
 
   /// Lista tokens do uid (útil em testes / limpeza).
   Future<List<FcmToken>> listForUid(String uid);
+
+  /// Todos os tokens (disparo broadcast de mural no lab / testes).
+  Future<List<FcmToken>> listAll();
 }
 
 class FcmTokenRepository implements FcmTokensRepository {
@@ -70,6 +73,14 @@ class FcmTokenRepository implements FcmTokensRepository {
   @override
   Future<List<FcmToken>> listForUid(String uid) async {
     final snapshot = await _tokens.where('uid', isEqualTo: uid).get();
+    return snapshot.docs
+        .map((doc) => FcmToken.fromFirestore(doc.id, doc.data()))
+        .toList();
+  }
+
+  @override
+  Future<List<FcmToken>> listAll() async {
+    final snapshot = await _tokens.get();
     return snapshot.docs
         .map((doc) => FcmToken.fromFirestore(doc.id, doc.data()))
         .toList();

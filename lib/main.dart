@@ -4,7 +4,9 @@ import 'app.dart';
 import 'auth/google_auth_service.dart';
 import 'classes/class_repository.dart';
 import 'fcm/fcm_messaging_service.dart';
+import 'fcm/fcm_sender.dart';
 import 'fcm/fcm_token_repository.dart';
+import 'fcm/notification_dispatch_service.dart';
 import 'firebase/firebase_bootstrap.dart';
 import 'forms/form_question_repository.dart';
 import 'levels/level_repository.dart';
@@ -14,7 +16,6 @@ import 'mural/notification_repository.dart';
 import 'presence/child_repository.dart';
 import 'presence/presence_repository.dart';
 import 'users/user_repository.dart';
-
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,14 +40,25 @@ Future<void> main() async {
       final authService = GoogleAuthService();
       final userRepository = UserRepository();
       final childRepository = ChildRepository();
-      final presenceRepository = PresenceRepository();
       final formQuestionRepository = FormQuestionRepository();
       final levelRepository = LevelRepository();
       final classRepository = ClassRepository();
-      final muralRepository = MuralRepository();
       final notificationRepository = NotificationRepository();
       final muralReadsRepository = MuralReadsRepositoryImpl();
       final fcmTokenRepository = FcmTokenRepository();
+      // Cliente não tem Admin: grava feed e degrada o push (script lab envia).
+      final notificationDispatch = NotificationDispatchService(
+        notifications: notificationRepository,
+        tokens: fcmTokenRepository,
+        children: childRepository,
+        sender: const NoOpFcmSender(),
+      );
+      final presenceRepository = PresenceRepository(
+        notificationDispatch: notificationDispatch,
+      );
+      final muralRepository = MuralRepository(
+        notificationDispatch: notificationDispatch,
+      );
       final fcmMessagingService = FcmMessagingService(
         tokenRepository: fcmTokenRepository,
       );
