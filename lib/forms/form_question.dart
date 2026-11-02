@@ -197,6 +197,7 @@ class FormQuestion {
 
   /// Snapshot estável para embutir em answers (histórico independente do template).
   Map<String, dynamic> toSnapshotMap() => {
+        'id': id,
         'prompt': prompt,
         'kind': kind.firestoreValue,
         'options': options.map((o) => o.toMap()).toList(),

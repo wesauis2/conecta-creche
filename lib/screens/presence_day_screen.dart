@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:timezone/timezone.dart' as tz;
 
+import '../forms/form_question_repository.dart';
 import '../presence/child.dart';
 import '../presence/child_repository.dart';
 import '../presence/parecer.dart';
@@ -11,11 +12,14 @@ import '../presence/presence_repository.dart';
 import '../users/user_profile.dart';
 import '../users/user_repository.dart';
 import 'children_screen.dart';
+import 'occurrence_form_screen.dart';
 import 'parecer_form_screen.dart';
 
 enum _PresenceFilter { presentes, sairam, todos }
 
 enum _RowMode { chegada, saida, parecer }
+
+enum _OpenRecordAction { ocorrencia, saida }
 
 enum _AdminAction { editTimestamps, delete }
 
@@ -49,6 +53,7 @@ class PresenceDayScreen extends StatefulWidget {
     required this.profile,
     required this.childRepository,
     required this.presenceRepository,
+    this.formQuestionRepository,
     this.userRepository,
     this.appBarLeadingActions = const [],
     String? dayKey,
@@ -57,6 +62,11 @@ class PresenceDayScreen extends StatefulWidget {
   final UserProfile profile;
   final ChildRepository childRepository;
   final PresenceRepository presenceRepository;
+
+  /// Needed to render configurable questions for ocorrências during the day.
+  /// Optional so older call sites/tests keep compiling; without it the
+  /// ocorrência action is hidden and saída keeps working (parecer v1).
+  final FormQuestionRepository? formQuestionRepository;
   final UserRepository? userRepository;
 
   /// Extra actions rendered before "Crianças"/"Nova" (e.g. shortcuts to the
@@ -145,9 +155,62 @@ class _PresenceDayScreenState extends State<PresenceDayScreen> {
       case _RowMode.chegada:
         return _confirmArrival(row.child);
       case _RowMode.saida:
-        return _confirmDeparture(row.child, row.open!);
+        return _chooseOpenRecordAction(row.child, row.open!);
       case _RowMode.parecer:
         return _confirmEditParecer(row.child, row.lastClosed!);
+    }
+  }
+
+  /// Open records accept ocorrências anytime and saída to close. Preferência:
+  /// chooser so the short during-day flow is one tap away without removing
+  /// the legacy parecer saída path (compat until task 05).
+  Future<void> _chooseOpenRecordAction(Child child, PresenceRecord open) async {
+    final canOccurrence = widget.formQuestionRepository != null;
+    if (!canOccurrence) {
+      return _confirmDeparture(child, open);
+    }
+
+    final action = await showDialog<_OpenRecordAction>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(child.name),
+        content: const Text('O que deseja registrar?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(_OpenRecordAction.ocorrencia),
+            child: const Text('Ocorrência'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(_OpenRecordAction.saida),
+            child: const Text('Saída'),
+          ),
+        ],
+      ),
+    );
+    if (action == null || !mounted) {
+      return;
+    }
+    switch (action) {
+      case _OpenRecordAction.ocorrencia:
+        await Navigator.of(context).push<void>(
+          MaterialPageRoute(
+            builder: (context) => OccurrenceFormScreen(
+              profile: widget.profile,
+              recordId: open.id,
+              childName: child.name,
+              formQuestionRepository: widget.formQuestionRepository!,
+              presenceRepository: widget.presenceRepository,
+            ),
+          ),
+        );
+      case _OpenRecordAction.saida:
+        await _confirmDeparture(child, open);
     }
   }
 

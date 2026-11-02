@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../forms/form_question.dart';
 import 'parecer.dart';
+import 'presence_answer.dart';
 import 'presence_clock.dart';
 import 'presence_open_guard.dart';
 import 'presence_record.dart';
@@ -190,5 +192,105 @@ class PresenceRepository {
   }) async {
     final matches = await _openQueryFor(childId, dayKey).limit(1).get();
     return matches.docs.isNotEmpty;
+  }
+
+  CollectionReference<Map<String, dynamic>> _answers(String recordId) =>
+      _records.doc(recordId).collection('answers');
+
+  /// Grava uma answer no registro aberto (ocorrência/incidente durante o dia
+  /// ou resposta na saída). Snapshot da pergunta + flags no momento. Ver
+  /// CONTEXT.md "Resposta (answer)" / "Incidente".
+  Future<String> registerAnswer({
+    required String recordId,
+    required FormQuestion question,
+    required Object? value,
+    required RecordedPhase recordedPhase,
+    required String createdBy,
+    DateTime? recordedAt,
+  }) async {
+    final recordSnap = await _records.doc(recordId).get();
+    final data = recordSnap.data();
+    if (data == null) {
+      throw StateError('presence record $recordId not found');
+    }
+    if (data['isOpen'] != true) {
+      throw PresenceRecordClosedException(recordId: recordId);
+    }
+
+    final instant = recordedAt ?? PresenceClock.now();
+    final docRef = await _answers(recordId).add(
+      PresenceAnswer.toCreateMap(
+        question: question,
+        value: value,
+        recordedPhase: recordedPhase,
+        createdBy: createdBy,
+        recordedAt: instant,
+      ),
+    );
+    return docRef.id;
+  }
+
+  /// Edita o `value` de uma answer dentro da janela de 24h (`createdAt`).
+  /// Atualiza `updatedBy`/`updatedAt`. [now] é injetável para testes.
+  Future<void> updateAnswer({
+    required String recordId,
+    required String answerId,
+    required Object? value,
+    required String updatedBy,
+    DateTime? now,
+  }) async {
+    final docRef = _answers(recordId).doc(answerId);
+    final snap = await docRef.get();
+    final data = snap.data();
+    if (data == null) {
+      throw StateError('answer $answerId not found on record $recordId');
+    }
+
+    final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
+    if (createdAt == null) {
+      throw StateError('answer $answerId missing createdAt');
+    }
+
+    AnswerEditGuard.ensureCanEdit(
+      createdAt: createdAt,
+      now: now ?? PresenceClock.now(),
+    );
+
+    await docRef.update({
+      'value': value,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedBy': updatedBy,
+    });
+  }
+
+  /// Answers do registro, ordenadas por `recordedAt` (client-side).
+  Future<List<PresenceAnswer>> listAnswers({required String recordId}) async {
+    final snapshot = await _answers(recordId).get();
+    final answers = snapshot.docs
+        .map((doc) => PresenceAnswer.fromFirestore(doc.id, doc.data()))
+        .toList();
+    answers.sort((a, b) {
+      final aAt = a.recordedAt ?? a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bAt = b.recordedAt ?? b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return aAt.compareTo(bAt);
+    });
+    return answers;
+  }
+
+  /// Live answers do registro, ordenadas por `recordedAt`.
+  Stream<List<PresenceAnswer>> watchAnswers({required String recordId}) {
+    return _answers(recordId).snapshots().map((snapshot) {
+      final answers = snapshot.docs
+          .map((doc) => PresenceAnswer.fromFirestore(doc.id, doc.data()))
+          .toList();
+      answers.sort((a, b) {
+        final aAt =
+            a.recordedAt ?? a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bAt =
+            b.recordedAt ?? b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return aAt.compareTo(bAt);
+      });
+      return answers;
+    });
   }
 }

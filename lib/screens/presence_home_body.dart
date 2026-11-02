@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../forms/form_question_repository.dart';
 import '../presence/child_repository.dart';
 import '../presence/presence_repository.dart';
 import '../users/user_profile.dart';
@@ -15,6 +16,7 @@ import 'presence_gestao_screen.dart';
 /// Depends on [profile] and the presence repos (no `GoogleAuthService`), so
 /// it can be widget-tested without Firebase Auth. Optional [userRepository]
 /// enables vínculos child↔responsável na tela Crianças (gestão+).
+/// [formQuestionRepository] enables ocorrências via answers no dia do cuidador.
 /// [appBarActions] lets the shell inject extra app-bar actions when needed
 /// (perfil/usuários live in Menu).
 class PresenceHomeBody extends StatelessWidget {
@@ -23,6 +25,7 @@ class PresenceHomeBody extends StatelessWidget {
     required this.profile,
     required this.childRepository,
     required this.presenceRepository,
+    this.formQuestionRepository,
     this.userRepository,
     this.appBarActions = const [],
   });
@@ -30,6 +33,7 @@ class PresenceHomeBody extends StatelessWidget {
   final UserProfile profile;
   final ChildRepository childRepository;
   final PresenceRepository presenceRepository;
+  final FormQuestionRepository? formQuestionRepository;
   final UserRepository? userRepository;
   final List<Widget> appBarActions;
 
@@ -49,6 +53,7 @@ class PresenceHomeBody extends StatelessWidget {
         profile: profile,
         childRepository: childRepository,
         presenceRepository: presenceRepository,
+        formQuestionRepository: formQuestionRepository,
         userRepository: userRepository,
         appBarLeadingActions: appBarActions,
       );
