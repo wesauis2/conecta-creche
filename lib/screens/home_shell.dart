@@ -13,9 +13,9 @@ import '../users/user_role.dart';
 import 'children_screen.dart';
 import 'form_questions_screen.dart';
 import 'incidentes_screen.dart';
-import 'module_placeholder_screen.dart';
 import 'mural_screen.dart';
 import 'presence_home_body.dart';
+import 'relatorios_screen.dart';
 import 'role_shell_view.dart';
 import 'user_menu_body.dart';
 import 'user_profile_screen.dart';
@@ -131,10 +131,10 @@ class HomeShell extends StatelessWidget {
           childRepository: childRepository,
         );
       case ShellModule.relatorios:
-        return const ModulePlaceholderScreen(
-          title: 'Relatórios',
-          message:
-              'Em breve você poderá acompanhar a rotina das crianças vinculadas.',
+        return RelatoriosScreen(
+          responsibleUid: profile.uid,
+          childRepository: childRepository,
+          presenceRepository: presenceRepository,
         );
       case ShellModule.menu:
         final tabs = shellTabsFor(profile.role);
