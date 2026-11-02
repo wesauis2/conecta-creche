@@ -153,6 +153,14 @@ service cloud.firestore {
             && (isPresenceClosing() || isPresenceParecerEdit()));
 
       allow delete: if isAdmin();
+
+      // Answers/ocorrências (CONTEXT.md "Resposta" / "Incidente").
+      // Durante a leva: permissivo (signed-in); enxugar no fim da leva.
+      match /answers/{answerId} {
+        allow get, list: if signedIn();
+        allow create, update: if signedIn();
+        allow delete: if false;
+      }
     }
 
     // `form_questions` (CONTEXT.md "Formulário configurável").

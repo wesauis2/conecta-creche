@@ -97,6 +97,7 @@ class HomeShell extends StatelessWidget {
           profile: profile,
           childRepository: childRepository,
           presenceRepository: presenceRepository,
+          formQuestionRepository: formQuestionRepository,
           userRepository: userRepository,
         );
       case ShellModule.mural:
