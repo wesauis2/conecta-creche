@@ -293,4 +293,49 @@ class PresenceRepository {
       return answers;
     });
   }
+
+  /// Agrega answers com `flagsSnapshot.incident` entre registros.
+  /// Filtros opcionais [dayKey] e [childId] restringem os registros-pai;
+  /// reutiliza [listAnswers]. Ordenado do mais recente ao mais antigo.
+  Future<List<PresenceIncident>> listIncidents({
+    String? dayKey,
+    String? childId,
+  }) async {
+    Query<Map<String, dynamic>> query = _records;
+    if (dayKey != null) {
+      query = query.where('dayKey', isEqualTo: dayKey);
+    }
+    if (childId != null) {
+      query = query.where('childId', isEqualTo: childId);
+    }
+
+    final snapshot = await query.get();
+    final incidents = <PresenceIncident>[];
+    for (final doc in snapshot.docs) {
+      final record = PresenceRecord.fromFirestore(doc.id, doc.data());
+      final answers = await listAnswers(recordId: record.id);
+      for (final answer in answers) {
+        if (!answer.isIncident) continue;
+        incidents.add(
+          PresenceIncident(
+            answer: answer,
+            recordId: record.id,
+            childId: record.childId,
+            dayKey: record.dayKey,
+          ),
+        );
+      }
+    }
+
+    incidents.sort((a, b) {
+      final aAt = a.answer.recordedAt ??
+          a.answer.createdAt ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+      final bAt = b.answer.recordedAt ??
+          b.answer.createdAt ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+      return bAt.compareTo(aAt);
+    });
+    return incidents;
+  }
 }

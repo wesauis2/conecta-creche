@@ -50,6 +50,7 @@ void main() {
       expect(answer.value, 'sim');
       expect(answer.flagsSnapshot.incident, isTrue);
       expect(answer.flagsSnapshot.duranteDia, isTrue);
+      expect(answer.displayValue, 'Sim');
       expect(answer.recordedPhase, RecordedPhase.duranteDia);
       expect(answer.createdBy, 'uid-1');
       expect(answer.updatedBy, isNull);
