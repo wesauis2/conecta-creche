@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../presence/child.dart';
+import '../presence/child_repository.dart';
 import '../users/user_profile.dart';
 import '../users/user_repository.dart';
 import '../users/user_role.dart';
@@ -9,10 +11,12 @@ class UsersScreen extends StatefulWidget {
     super.key,
     required this.profile,
     required this.userRepository,
+    required this.childRepository,
   });
 
   final UserProfile profile;
   final UserRepository userRepository;
+  final ChildRepository childRepository;
 
   @override
   State<UsersScreen> createState() => _UsersScreenState();
@@ -135,6 +139,46 @@ class _UsersScreenState extends State<UsersScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Não foi possível alterar o acesso: $error')),
+        );
+      }
+    }
+  }
+
+  Future<void> _editLinkedChildren(UserProfile target) async {
+    final label = target.displayName?.trim().isNotEmpty == true
+        ? target.displayName!
+        : (target.email ?? target.uid);
+
+    final selected = await showDialog<Set<String>>(
+      context: context,
+      builder: (context) => _SelectChildrenDialog(
+        childRepository: widget.childRepository,
+        responsibleUid: target.uid,
+        responsibleLabel: label,
+      ),
+    );
+
+    if (selected == null || !mounted) {
+      return;
+    }
+
+    try {
+      await widget.childRepository.setResponsibleActiveChildren(
+        uid: target.uid,
+        activeChildIds: selected,
+        updatedBy: widget.profile.uid,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Crianças de $label atualizadas.')),
+        );
+      }
+    } on Object catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Não foi possível salvar as crianças: $error'),
+          ),
         );
       }
     }
@@ -263,6 +307,8 @@ class _UsersScreenState extends State<UsersScreen> {
                     final isSelf = user.uid == widget.profile.uid;
                     final canEdit = !isSelf &&
                         widget.profile.role.canManage(user.role);
+                    final canLinkChildren =
+                        user.role == UserRole.responsavel;
 
                     return ListTile(
                       leading: CircleAvatar(
@@ -286,6 +332,14 @@ class _UsersScreenState extends State<UsersScreen> {
                             label: Text(user.role.filterLabel),
                             visualDensity: VisualDensity.compact,
                           ),
+                          if (canLinkChildren) ...[
+                            const SizedBox(width: 4),
+                            IconButton(
+                              tooltip: 'Crianças vinculadas',
+                              onPressed: () => _editLinkedChildren(user),
+                              icon: const Icon(Icons.link),
+                            ),
+                          ],
                           if (canEdit) ...[
                             const SizedBox(width: 4),
                             IconButton(
@@ -305,6 +359,159 @@ class _UsersScreenState extends State<UsersScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _SelectChildrenDialog extends StatefulWidget {
+  const _SelectChildrenDialog({
+    required this.childRepository,
+    required this.responsibleUid,
+    required this.responsibleLabel,
+  });
+
+  final ChildRepository childRepository;
+  final String responsibleUid;
+  final String responsibleLabel;
+
+  @override
+  State<_SelectChildrenDialog> createState() => _SelectChildrenDialogState();
+}
+
+class _SelectChildrenDialogState extends State<_SelectChildrenDialog> {
+  Set<String>? _selected;
+  String _query = '';
+  Object? _loadError;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInitialSelection();
+  }
+
+  Future<void> _loadInitialSelection() async {
+    try {
+      final linked = await widget.childRepository
+          .listChildrenForResponsible(widget.responsibleUid);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _selected = linked
+            .where((child) => child.active)
+            .map((child) => child.id)
+            .toSet();
+      });
+    } on Object catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _loadError = error);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('Crianças de ${widget.responsibleLabel}'),
+      content: SizedBox(
+        width: double.maxFinite,
+        height: 360,
+        child: _loadError != null
+            ? Text(
+                'Não foi possível carregar os vínculos.',
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              )
+            : _selected == null
+                ? const Center(child: CircularProgressIndicator())
+                : Column(
+                    children: [
+                      TextField(
+                        decoration: const InputDecoration(
+                          labelText: 'Buscar',
+                          hintText: 'Nome da criança',
+                          prefixIcon: Icon(Icons.search),
+                        ),
+                        onChanged: (value) => setState(() => _query = value),
+                      ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: StreamBuilder<List<Child>>(
+                          stream: widget.childRepository
+                              .watchChildren(activeOnly: true),
+                          builder: (context, snapshot) {
+                            if (snapshot.hasError) {
+                              return Text(
+                                'Não foi possível carregar as crianças.',
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                              );
+                            }
+                            if (!snapshot.hasData) {
+                              return const Center(
+                                child: CircularProgressIndicator(),
+                              );
+                            }
+
+                            final query = _query.trim().toLowerCase();
+                            final children = snapshot.data!.where((child) {
+                              if (query.isEmpty) {
+                                return true;
+                              }
+                              return child.name.toLowerCase().contains(query);
+                            }).toList(growable: false);
+
+                            if (children.isEmpty) {
+                              return const Center(
+                                child: Text(
+                                  'Nenhuma criança ativa cadastrada.',
+                                  textAlign: TextAlign.center,
+                                ),
+                              );
+                            }
+
+                            return ListView.builder(
+                              itemCount: children.length,
+                              itemBuilder: (context, index) {
+                                final child = children[index];
+                                final checked =
+                                    _selected!.contains(child.id);
+                                return CheckboxListTile(
+                                  value: checked,
+                                  title: Text(child.name),
+                                  controlAffinity:
+                                      ListTileControlAffinity.leading,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      if (value == true) {
+                                        _selected!.add(child.id);
+                                      } else {
+                                        _selected!.remove(child.id);
+                                      }
+                                    });
+                                  },
+                                );
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: _selected == null
+              ? null
+              : () => Navigator.of(context).pop(_selected),
+          child: const Text('Salvar'),
+        ),
+      ],
     );
   }
 }

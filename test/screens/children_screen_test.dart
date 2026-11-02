@@ -1,6 +1,7 @@
 import 'package:conecta_creche/presence/child_repository.dart';
 import 'package:conecta_creche/screens/children_screen.dart';
 import 'package:conecta_creche/users/user_profile.dart';
+import 'package:conecta_creche/users/user_repository.dart';
 import 'package:conecta_creche/users/user_role.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -14,13 +15,32 @@ UserProfile _profile(UserRole role) => UserProfile(
 
 Widget _wrap(Widget child) => MaterialApp(home: child);
 
+Future<void> _seedUser(
+  FakeFirebaseFirestore firestore, {
+  required String uid,
+  required UserRole role,
+  String? displayName,
+  String? email,
+}) async {
+  await firestore.collection('users').doc(uid).set({
+    'uid': uid,
+    'displayName': displayName ?? uid,
+    'email': email ?? '$uid@example.com',
+  });
+  await firestore.collection('user_roles').doc(uid).set({
+    'role': role.name,
+  });
+}
+
 void main() {
   late FakeFirebaseFirestore firestore;
   late ChildRepository repository;
+  late UserRepository userRepository;
 
   setUp(() {
     firestore = FakeFirebaseFirestore();
     repository = ChildRepository(firestore: firestore);
+    userRepository = UserRepository(firestore: firestore);
   });
 
   testWidgets('cuidador sees only active children and no inactivate action',
@@ -216,5 +236,66 @@ void main() {
       find.text('Você não tem permissão para ver esta área.'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('gestão can select responsáveis for a child', (tester) async {
+    final childId = await repository.createChild(name: 'Zeca', createdBy: 'u1');
+    await _seedUser(
+      firestore,
+      uid: 'resp-1',
+      role: UserRole.responsavel,
+      displayName: 'Maria Responsável',
+    );
+    await _seedUser(
+      firestore,
+      uid: 'cuid-1',
+      role: UserRole.cuidador,
+      displayName: 'João Cuidador',
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        ChildrenScreen(
+          profile: _profile(UserRole.gestao),
+          childRepository: repository,
+          userRepository: userRepository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Sem responsáveis'), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.link));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Responsáveis de Zeca'), findsOneWidget);
+    expect(find.text('Maria Responsável'), findsOneWidget);
+    expect(find.text('João Cuidador'), findsNothing);
+
+    await tester.tap(find.text('Maria Responsável'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Salvar'));
+    await tester.pumpAndSettle();
+
+    final doc = await firestore.collection('children').doc(childId).get();
+    expect(doc.data()!['responsibleUids'], ['resp-1']);
+    expect(find.text('1 responsável'), findsOneWidget);
+  });
+
+  testWidgets('cuidador does not see responsáveis link action', (tester) async {
+    await repository.createChild(name: 'Zeca', createdBy: 'u1');
+
+    await tester.pumpWidget(
+      _wrap(
+        ChildrenScreen(
+          profile: _profile(UserRole.cuidador),
+          childRepository: repository,
+          userRepository: userRepository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.link), findsNothing);
   });
 }

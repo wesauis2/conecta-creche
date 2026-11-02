@@ -53,6 +53,7 @@ class HomeShell extends StatelessWidget {
         builder: (context) => UsersScreen(
           profile: profile,
           userRepository: userRepository,
+          childRepository: childRepository,
         ),
       ),
     );
@@ -64,6 +65,7 @@ class HomeShell extends StatelessWidget {
         builder: (context) => ChildrenScreen(
           profile: profile,
           childRepository: childRepository,
+          userRepository: userRepository,
         ),
       ),
     );
@@ -92,6 +94,7 @@ class HomeShell extends StatelessWidget {
           profile: profile,
           childRepository: childRepository,
           presenceRepository: presenceRepository,
+          userRepository: userRepository,
         );
       case ShellModule.mural:
         final greetingName = profile.displayName?.trim();

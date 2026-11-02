@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../presence/child_repository.dart';
 import '../presence/presence_repository.dart';
 import '../users/user_profile.dart';
+import '../users/user_repository.dart';
 import 'presence_day_screen.dart';
 import 'presence_gestao_screen.dart';
 
@@ -11,22 +12,25 @@ import 'presence_gestao_screen.dart';
 /// other roles (responsável/convidado) get a placeholder — they never reach
 /// the presence tab. See CONTEXT.md "Visão do cuidador" / "Visão da gestão".
 ///
-/// Depends only on [profile] and the presence repos (no
-/// `GoogleAuthService`/`UserRepository`), so it can be widget-tested
-/// directly without touching Firebase Auth. [appBarActions] lets the shell
-/// inject extra app-bar actions when needed (perfil/usuários live in Menu).
+/// Depends on [profile] and the presence repos (no `GoogleAuthService`), so
+/// it can be widget-tested without Firebase Auth. Optional [userRepository]
+/// enables vínculos child↔responsável na tela Crianças (gestão+).
+/// [appBarActions] lets the shell inject extra app-bar actions when needed
+/// (perfil/usuários live in Menu).
 class PresenceHomeBody extends StatelessWidget {
   const PresenceHomeBody({
     super.key,
     required this.profile,
     required this.childRepository,
     required this.presenceRepository,
+    this.userRepository,
     this.appBarActions = const [],
   });
 
   final UserProfile profile;
   final ChildRepository childRepository;
   final PresenceRepository presenceRepository;
+  final UserRepository? userRepository;
   final List<Widget> appBarActions;
 
   @override
@@ -36,6 +40,7 @@ class PresenceHomeBody extends StatelessWidget {
         profile: profile,
         childRepository: childRepository,
         presenceRepository: presenceRepository,
+        userRepository: userRepository,
         appBarLeadingActions: appBarActions,
       );
     }
@@ -44,6 +49,7 @@ class PresenceHomeBody extends StatelessWidget {
         profile: profile,
         childRepository: childRepository,
         presenceRepository: presenceRepository,
+        userRepository: userRepository,
         appBarLeadingActions: appBarActions,
       );
     }

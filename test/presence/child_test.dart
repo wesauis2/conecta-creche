@@ -8,6 +8,7 @@ void main() {
       final child = Child.fromFirestore('child-1', {
         'name': 'Ana',
         'active': true,
+        'responsibleUids': <String>['resp-1', 'resp-2'],
         'createdAt': Timestamp.fromDate(DateTime.utc(2026, 1, 1)),
         'updatedAt': Timestamp.fromDate(DateTime.utc(2026, 1, 2)),
         'createdBy': 'uid-1',
@@ -17,16 +18,18 @@ void main() {
       expect(child.id, 'child-1');
       expect(child.name, 'Ana');
       expect(child.active, isTrue);
+      expect(child.responsibleUids, ['resp-1', 'resp-2']);
       expect(child.createdAt?.isAtSameMomentAs(DateTime.utc(2026, 1, 1)), isTrue);
       expect(child.updatedAt?.isAtSameMomentAs(DateTime.utc(2026, 1, 2)), isTrue);
       expect(child.createdBy, 'uid-1');
       expect(child.updatedBy, 'uid-2');
     });
 
-    test('defaults active to true and audit fields to null when absent', () {
+    test('defaults active to true, empty responsibleUids, and audit nulls', () {
       final child = Child.fromFirestore('child-2', {'name': 'Beto'});
 
       expect(child.active, isTrue);
+      expect(child.responsibleUids, isEmpty);
       expect(child.createdAt, isNull);
       expect(child.updatedAt, isNull);
       expect(child.createdBy, isNull);

@@ -8,6 +8,7 @@ import '../presence/presence_clock.dart';
 import '../presence/presence_record.dart';
 import '../presence/presence_repository.dart';
 import '../users/user_profile.dart';
+import '../users/user_repository.dart';
 import 'children_screen.dart';
 import 'parecer_form_screen.dart';
 
@@ -64,6 +65,7 @@ class PresenceGestaoScreen extends StatefulWidget {
     required this.profile,
     required this.childRepository,
     required this.presenceRepository,
+    this.userRepository,
     this.appBarLeadingActions = const [],
     DateTime? initialDate,
   }) : initialDate = initialDate ?? PresenceClock.now();
@@ -71,6 +73,7 @@ class PresenceGestaoScreen extends StatefulWidget {
   final UserProfile profile;
   final ChildRepository childRepository;
   final PresenceRepository presenceRepository;
+  final UserRepository? userRepository;
 
   /// Extra actions rendered before "Crianças" (e.g. shortcuts to the user's
   /// profile) when this screen owns the app's only app bar.
@@ -249,6 +252,7 @@ class _PresenceGestaoScreenState extends State<PresenceGestaoScreen> {
         builder: (context) => ChildrenScreen(
           profile: widget.profile,
           childRepository: widget.childRepository,
+          userRepository: widget.userRepository,
         ),
       ),
     );
