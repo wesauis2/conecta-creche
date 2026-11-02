@@ -50,6 +50,10 @@ service cloud.firestore {
       return isGestaoPlus();
     }
 
+    function isResponsavelPlus() {
+      return hasRole() && rank(ownRole()) >= 1;
+    }
+
     function isValidRole(role) {
       return role in ['admin', 'gestao', 'cuidador', 'responsavel', 'convidado'];
     }
@@ -59,12 +63,59 @@ service cloud.firestore {
         .hasOnly(['role', 'updatedAt']);
     }
 
+    // Vínculo criança↔responsável: uid ∈ children.responsibleUids.
+    function childData(childId) {
+      return get(/databases/$(database)/documents/children/$(childId)).data;
+    }
+
+    function isLinkedResponsible(childId) {
+      return signedIn()
+        && childId is string
+        && exists(/databases/$(database)/documents/children/$(childId))
+        && request.auth.uid in childData(childId).responsibleUids;
+    }
+
+    function canReadChildDoc() {
+      return isCaregiverPlus()
+        || (signedIn() && request.auth.uid in resource.data.responsibleUids);
+    }
+
+    function canReadPresenceRecord() {
+      return isCaregiverPlus()
+        || isLinkedResponsible(resource.data.childId);
+    }
+
+    function canReadPresenceRecordId(recordId) {
+      return isCaregiverPlus()
+        || isLinkedResponsible(
+             get(/databases/$(database)/documents/presence_records/$(recordId))
+               .data.childId);
+    }
+
+    function isMuralReleased() {
+      return resource.data.releasedAt is timestamp
+        && resource.data.releasedAt <= request.time;
+    }
+
+    function canReadMuralPost() {
+      return isGestaoPlus()
+        || (isResponsavelPlus() && isMuralReleased());
+    }
+
+    function canReadNotification() {
+      return signedIn()
+        && (
+          !('userId' in resource.data.keys())
+          || resource.data.userId == null
+          || resource.data.userId == request.auth.uid
+        );
+    }
+
     // ---------------------------------------------------------------------------
-    // Matriz FINAL (pós-leva) — docs/requisitos/papeis-acesso.md
-    // Enxugar writes/reads para esta intenção; a leva mantém signed-in /
-    // Cuidador+ permissivo para não bloquear o lab. Deploy manual no fim.
+    // Matriz FINAL — docs/requisitos/papeis-acesso.md
+    // Publish manual: docs/firestore-rules.md (não há deploy automático).
     //
-    // | Coleção / campo              | Read final                         | Write final                          |
+    // | Coleção / campo              | Read                               | Write                                |
     // |------------------------------|------------------------------------|--------------------------------------|
     // | users                        | dono ou gestão+                    | dono (sem `role`)                    |
     // | user_roles                   | dono ou gestão+                    | create self=convidado; update gestão+|
@@ -72,10 +123,10 @@ service cloud.firestore {
     // | presence_records             | Cuidador+; responsável só de vinculados | create/close/parecer Cuidador+; admin corrige/apaga |
     // | presence_records/*/answers   | mesmos leitores do registro        | create/update Cuidador+ (janela 24h no app) |
     // | form_questions               | Cuidador+                          | gestão+                              |
-    // | levels                       | Cuidador+                          | gestão+                              |
-    // | classes                      | Cuidador+                          | gestão+                              |
-    // | mural_posts                  | autenticados rank ≥ responsável; respeitar releasedAt | gestão+ |
+    // | mural_posts                  | rank ≥ responsável + releasedAt; gestão+ vê pré-liberação | gestão+ |
     // | notifications                | destinatário (+ broadcast)         | gestão+                              |
+    // | fcm_tokens                   | dono                               | dono                                 |
+    // | levels / classes / classrooms| Cuidador+                          | gestão+                              |
     // | mural_reads                  | dono; gestão+ lista                | dono (próprio uid)                   |
     // ---------------------------------------------------------------------------
 
@@ -105,8 +156,6 @@ service cloud.firestore {
     }
 
     // `children` catalog (CONTEXT.md "Criança" / "Vínculo criança↔responsável").
-    // Leva: read signed-in (relatórios/mural do responsável); write Cuidador+
-    // inclui `responsibleUids`. Final: ver matriz acima.
     function onlyChildFieldsChanged() {
       return request.resource.data.diff(resource.data).affectedKeys()
         .hasOnly([
@@ -120,28 +169,44 @@ service cloud.firestore {
         ]);
     }
 
+    function onlyChildNameFieldsChanged() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['name', 'updatedAt', 'updatedBy']);
+    }
+
     function childActiveUnchanged() {
       return request.resource.data.active == resource.data.active;
     }
 
+    function childResponsibleUidsUnchanged() {
+      return request.resource.data.responsibleUids == resource.data.responsibleUids;
+    }
+
+    function childCreateLinksOk() {
+      return !('responsibleUids' in request.resource.data.keys())
+        || request.resource.data.responsibleUids.size() == 0
+        || isGestaoPlus();
+    }
+
     match /children/{childId} {
-      // Leva: qualquer autenticado lê (array-contains responsibleUids no app).
-      // Final: Cuidador+ OU request.auth.uid in resource.data.responsibleUids.
-      allow get, list: if signedIn();
+      allow get, list: if canReadChildDoc();
 
       allow create: if isCaregiverPlus()
         && request.resource.data.name is string
         && request.resource.data.active == true
         && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.updatedBy == request.auth.uid;
+        && request.resource.data.updatedBy == request.auth.uid
+        && childCreateLinksOk();
 
-      // Leva: Cuidador+ pode editar vínculos (`responsibleUids`).
-      // Final: só gestão+ altera `active` e `responsibleUids`.
-      allow update: if isCaregiverPlus()
-        && onlyChildFieldsChanged()
-        && request.resource.data.createdAt == resource.data.createdAt
+      allow update: if request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.createdBy == resource.data.createdBy
-        && (childActiveUnchanged() || isGestaoPlus());
+        && (
+          (isGestaoPlus() && onlyChildFieldsChanged())
+          || (isCaregiverPlus()
+              && onlyChildNameFieldsChanged()
+              && childActiveUnchanged()
+              && childResponsibleUidsUnchanged())
+        );
 
       allow delete: if false;
     }
@@ -149,9 +214,7 @@ service cloud.firestore {
     // `presence_records` (CONTEXT.md "Registro de presença" / "Chegada" /
     // "Saída"). Cuidador+ create chegada, close (form answers e/ou parecer
     // legado) e edita parecer depois; `childId`/`dayKey`/`arrivedAt` e um
-    // `departedAt` já definido são imutáveis fora do admin. Durante a leva:
-    // read signed-in (responsável/relatórios); update de fechamento/parecer
-    // permissivo para Cuidador+ (sem exigir parecer); enxugar no fim.
+    // `departedAt` já definido são imutáveis fora do admin.
     function presenceCoreFieldsUnchanged() {
       return request.resource.data.childId == resource.data.childId
         && request.resource.data.dayKey == resource.data.dayKey
@@ -173,9 +236,7 @@ service cloud.firestore {
     }
 
     match /presence_records/{recordId} {
-      // Leva: signed-in lê (relatórios do responsável). Final: Cuidador+ ou
-      // responsável com vínculo na criança do registro.
-      allow get, list: if signedIn();
+      allow get, list: if canReadPresenceRecord();
 
       allow create: if isCaregiverPlus()
         && request.resource.data.departedAt == null
@@ -183,7 +244,6 @@ service cloud.firestore {
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.updatedBy == request.auth.uid;
 
-      // Leva: Cuidador+ pode fechar sem parecer (answers na subcoleção).
       allow update: if isAdmin()
         || (isCaregiverPlus()
             && presenceCoreFieldsUnchanged()
@@ -192,62 +252,81 @@ service cloud.firestore {
       allow delete: if isAdmin();
 
       // Answers/ocorrências (CONTEXT.md "Resposta" / "Incidente").
-      // Leva: permissivo (signed-in). Final: mesmos leitores do registro;
-      // write Cuidador+ (app já aplica janela 24h).
+      // Mesmos leitores do registro; write Cuidador+ (app aplica janela 24h).
       match /answers/{answerId} {
-        allow get, list: if signedIn();
-        allow create, update: if signedIn();
+        allow get, list: if canReadPresenceRecordId(recordId);
+        allow create, update: if isCaregiverPlus();
         allow delete: if false;
       }
     }
 
     // `form_questions` (CONTEXT.md "Formulário configurável").
-    // Leva: signed-in create/update. Final: read Cuidador+; write gestão+.
     match /form_questions/{questionId} {
-      allow get, list: if signedIn();
-      allow create, update: if signedIn();
-      allow delete: if false;
-    }
-
-    // `levels` (CONTEXT.md "Nível" / docs/requisitos/niveis-turmas.md).
-    // Leva: signed-in. Final: read Cuidador+; write gestão+.
-    match /levels/{levelId} {
-      allow get, list: if signedIn();
-      allow create, update: if signedIn();
-      allow delete: if false;
-    }
-
-    // `classes` (CONTEXT.md "Turma" — sala como texto opcional na v1).
-    // Leva: signed-in. Final: read Cuidador+; write gestão+.
-    match /classes/{classId} {
-      allow get, list: if signedIn();
-      allow create, update: if signedIn();
+      allow get, list: if isCaregiverPlus();
+      allow create, update: if isGestaoPlus();
       allow delete: if false;
     }
 
     // `mural_posts` (CONTEXT.md "Mural").
-    // Leva: signed-in. Final: read rank ≥ responsável + releasedAt;
-    // write gestão+ (cuidador NÃO publica na v1).
+    // rank ≥ responsável + releasedAt; gestão+ vê pré-liberação.
+    // Write só gestão+ (cuidador NÃO publica na v1).
     match /mural_posts/{postId} {
-      allow get, list: if signedIn();
-      allow create, update: if signedIn();
+      allow get, list: if canReadMuralPost();
+      allow create, update: if isGestaoPlus();
       allow delete: if false;
     }
 
     // `notifications` (CONTEXT.md "Mural" — registro local; FCM depois).
-    // Leva: signed-in. Final: destinatário lê as próprias (+ broadcast
-    // sem userId); write gestão+.
+    // Destinatário lê as próprias (+ broadcast sem userId); write gestão+.
     match /notifications/{notificationId} {
-      allow get, list: if signedIn();
-      allow create, update: if signedIn();
+      allow get, list: if canReadNotification();
+      allow create, update: if isGestaoPlus();
+      allow delete: if false;
+    }
+
+    // Placeholder — docs/requisitos/notificacoes-push.md (ticket FCM).
+    match /fcm_tokens/{tokenId} {
+      allow get, list: if signedIn()
+        && resource.data.uid == request.auth.uid;
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid;
+      allow update: if signedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid;
+      allow delete: if signedIn()
+        && resource.data.uid == request.auth.uid;
+    }
+
+    // Placeholders — docs/requisitos/niveis-turmas.md (RF0010).
+    match /levels/{levelId} {
+      allow get, list: if isCaregiverPlus();
+      allow create, update: if isGestaoPlus();
+      allow delete: if false;
+    }
+
+    match /classes/{classId} {
+      allow get, list: if isCaregiverPlus();
+      allow create, update: if isGestaoPlus();
+      allow delete: if false;
+    }
+
+    match /classrooms/{classroomId} {
+      allow get, list: if isCaregiverPlus();
+      allow create, update: if isGestaoPlus();
       allow delete: if false;
     }
 
     // `mural_reads` (docs/requisitos/mural-leitura.md — RF0016).
-    // Leva: signed-in. Final: create/update só do próprio uid; gestão+ lista.
     match /mural_reads/{readId} {
-      allow get, list: if signedIn();
-      allow create, update: if signedIn();
+      allow get: if signedIn()
+        && (resource.data.uid == request.auth.uid || isGestaoPlus());
+      allow list: if isGestaoPlus()
+        || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid;
+      allow update: if signedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid;
       allow delete: if false;
     }
   }
