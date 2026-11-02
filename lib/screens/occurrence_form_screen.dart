@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../forms/form_media_answer.dart';
+import '../forms/form_media_field.dart';
 import '../forms/form_question.dart';
 import '../forms/form_question_repository.dart';
 import '../presence/presence_answer.dart';
@@ -200,6 +202,7 @@ class _AnswerValueDialogState extends State<_AnswerValueDialog> {
   late String? _optionId;
   late final TextEditingController _textController;
   late final TextEditingController _otherController;
+  FormMediaAnswer? _media;
   bool _explicitGesture = false;
 
   FormQuestion get question => widget.question;
@@ -235,11 +238,11 @@ class _AnswerValueDialogState extends State<_AnswerValueDialog> {
             if (other.isNotEmpty) 'otherText': other,
           };
         }(),
-      FormQuestionKind.text ||
+      FormQuestionKind.text => _textController.text.trim(),
       FormQuestionKind.image ||
       FormQuestionKind.audio ||
       FormQuestionKind.video =>
-        _textController.text.trim(),
+        _media?.toMap(),
     };
 
     if (question.kind == FormQuestionKind.choice && _optionId == null) {
@@ -249,6 +252,9 @@ class _AnswerValueDialogState extends State<_AnswerValueDialog> {
       return;
     }
     if (value is String && value.isEmpty) {
+      return;
+    }
+    if (question.kind.isMedia && value == null) {
       return;
     }
 
@@ -292,20 +298,25 @@ class _AnswerValueDialogState extends State<_AnswerValueDialog> {
                 ],
               ],
             ),
-          FormQuestionKind.text ||
+          FormQuestionKind.text => TextField(
+              controller: _textController,
+              autofocus: true,
+              maxLines: 3,
+              decoration: const InputDecoration(labelText: 'Resposta'),
+              onChanged: (_) => setState(() => _explicitGesture = true),
+            ),
           FormQuestionKind.image ||
           FormQuestionKind.audio ||
           FormQuestionKind.video =>
-            TextField(
-              controller: _textController,
-              autofocus: true,
-              maxLines: question.kind == FormQuestionKind.text ? 3 : 1,
-              decoration: InputDecoration(
-                labelText: question.kind == FormQuestionKind.text
-                    ? 'Resposta'
-                    : 'Referência do anexo',
-              ),
-              onChanged: (_) => setState(() => _explicitGesture = true),
+            FormMediaField(
+              kind: question.kind,
+              value: _media,
+              onChanged: (media) => setState(() {
+                _media = media;
+                if (media != null) {
+                  _explicitGesture = true;
+                }
+              }),
             ),
         },
       ),

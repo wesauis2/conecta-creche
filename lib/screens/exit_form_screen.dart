@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../forms/form_media_answer.dart';
+import '../forms/form_media_field.dart';
 import '../forms/form_question.dart';
 import '../forms/form_question_repository.dart';
 import '../presence/presence_answer.dart';
@@ -175,6 +177,9 @@ class _ExitFormScreenState extends State<ExitFormScreen> {
       if (draft is String && draft.trim().isEmpty) {
         return false;
       }
+      if (q.kind.isMedia && FormMediaAnswer.tryParse(draft) == null) {
+        return false;
+      }
     }
     return true;
   }
@@ -241,37 +246,7 @@ class _ExitFormScreenState extends State<ExitFormScreen> {
     }
   }
 
-  String _formatExisting(PresenceAnswer answer) {
-    final value = answer.value;
-    final options = answer.questionSnapshot.options;
-    if (value is String) {
-      for (final opt in options) {
-        if (opt.id == value) {
-          return opt.label;
-        }
-      }
-      return value;
-    }
-    if (value is Map) {
-      final optionId = value['optionId'];
-      final other = value['otherText'];
-      String? label;
-      if (optionId is String) {
-        for (final opt in options) {
-          if (opt.id == optionId) {
-            label = opt.label;
-            break;
-          }
-        }
-      }
-      final parts = <String>[
-        if (label != null) label,
-        if (other is String && other.isNotEmpty) other,
-      ];
-      return parts.isEmpty ? value.toString() : parts.join(' · ');
-    }
-    return value?.toString() ?? '—';
-  }
+  String _formatExisting(PresenceAnswer answer) => answer.displayValue;
 
   @override
   Widget build(BuildContext context) {
@@ -427,6 +402,7 @@ class _ExitFormScreenState extends State<ExitFormScreen> {
         question: question,
         selectedOptionId: _draftOptionId(question),
         textController: _controllerFor(question.id),
+        mediaValue: FormMediaAnswer.tryParse(_drafts[question.id]),
         onChoice: (optionId) {
           setState(() {
             _drafts[question.id] = optionId;
@@ -446,6 +422,16 @@ class _ExitFormScreenState extends State<ExitFormScreen> {
           setState(() {
             _drafts[question.id] = text;
             _explicitGestures.add(question.id);
+          });
+        },
+        onMedia: (media) {
+          setState(() {
+            if (media == null) {
+              _drafts.remove(question.id);
+            } else {
+              _drafts[question.id] = media.toMap();
+              _explicitGestures.add(question.id);
+            }
           });
         },
       ),
@@ -479,6 +465,7 @@ class _ExitFormScreenState extends State<ExitFormScreen> {
         labelSuffix: ' (opcional)',
         selectedOptionId: null,
         textController: _controllerFor(question.id),
+        mediaValue: FormMediaAnswer.tryParse(_drafts[question.id]),
         onChoice: (optionId) {
           setState(() {
             _drafts[question.id] = optionId;
@@ -500,6 +487,16 @@ class _ExitFormScreenState extends State<ExitFormScreen> {
             _explicitGestures.add(question.id);
           });
         },
+        onMedia: (media) {
+          setState(() {
+            if (media == null) {
+              _drafts.remove(question.id);
+            } else {
+              _drafts[question.id] = media.toMap();
+              _explicitGestures.add(question.id);
+            }
+          });
+        },
       ),
     );
   }
@@ -512,6 +509,8 @@ class _AnswerEditor extends StatelessWidget {
     required this.onChoice,
     required this.onChoiceOther,
     required this.onText,
+    required this.onMedia,
+    this.mediaValue,
     this.selectedOptionId,
     this.labelSuffix = '',
   });
@@ -519,9 +518,11 @@ class _AnswerEditor extends StatelessWidget {
   final FormQuestion question;
   final String? selectedOptionId;
   final TextEditingController textController;
+  final FormMediaAnswer? mediaValue;
   final void Function(String optionId) onChoice;
   final void Function(String optionId, String otherText) onChoiceOther;
   final ValueChanged<String> onText;
+  final ValueChanged<FormMediaAnswer?> onMedia;
   final String labelSuffix;
 
   @override
@@ -575,19 +576,19 @@ class _AnswerEditor extends StatelessWidget {
                 ],
               ],
             ),
-          FormQuestionKind.text ||
+          FormQuestionKind.text => TextField(
+              controller: textController,
+              maxLines: 3,
+              decoration: const InputDecoration(labelText: 'Resposta'),
+              onChanged: onText,
+            ),
           FormQuestionKind.image ||
           FormQuestionKind.audio ||
           FormQuestionKind.video =>
-            TextField(
-              controller: textController,
-              maxLines: question.kind == FormQuestionKind.text ? 3 : 1,
-              decoration: InputDecoration(
-                labelText: question.kind == FormQuestionKind.text
-                    ? 'Resposta'
-                    : 'Referência do anexo',
-              ),
-              onChanged: onText,
+            FormMediaField(
+              kind: question.kind,
+              value: mediaValue,
+              onChanged: onMedia,
             ),
         },
       ],

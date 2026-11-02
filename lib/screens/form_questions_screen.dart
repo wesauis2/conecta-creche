@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../forms/form_media_answer.dart';
 import '../forms/form_question.dart';
 import '../forms/form_question_repository.dart';
 import '../users/user_profile.dart';
@@ -442,6 +443,15 @@ class _QuestionEditorDialogState extends State<_QuestionEditorDialog> {
                   }
                 },
               ),
+              if (_kind.isMedia) ...[
+                const SizedBox(height: 8),
+                Text(
+                  kFormMediaSparkNotice,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ],
               if (_needsOptions) ...[
                 const SizedBox(height: 12),
                 TextField(
