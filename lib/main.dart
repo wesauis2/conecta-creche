@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import 'app.dart';
 import 'auth/google_auth_service.dart';
+import 'classes/class_repository.dart';
 import 'firebase/firebase_bootstrap.dart';
 import 'forms/form_question_repository.dart';
+import 'levels/level_repository.dart';
 import 'mural/mural_repository.dart';
 import 'mural/notification_repository.dart';
 import 'presence/child_repository.dart';
@@ -34,6 +36,8 @@ Future<void> main() async {
       final childRepository = ChildRepository();
       final presenceRepository = PresenceRepository();
       final formQuestionRepository = FormQuestionRepository();
+      final levelRepository = LevelRepository();
+      final classRepository = ClassRepository();
       final muralRepository = MuralRepository();
       final notificationRepository = NotificationRepository();
       await authService.ensureGoogleSignInInitialized();
@@ -44,6 +48,8 @@ Future<void> main() async {
           childRepository: childRepository,
           presenceRepository: presenceRepository,
           formQuestionRepository: formQuestionRepository,
+          levelRepository: levelRepository,
+          classRepository: classRepository,
           muralRepository: muralRepository,
           notificationRepository: notificationRepository,
         ),

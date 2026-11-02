@@ -20,6 +20,8 @@ void main() {
     VoidCallback? onOpenUsers,
     VoidCallback? onOpenChildren,
     VoidCallback? onOpenForms,
+    VoidCallback? onOpenLevels,
+    VoidCallback? onOpenClasses,
     VoidCallback? onOpenProfile,
     VoidCallback? onSignOut,
   }) async {
@@ -40,6 +42,10 @@ void main() {
                 (role.canOperatePresence ? () {} : null),
             onOpenForms: onOpenForms ??
                 (role.canInactivateChild ? () {} : null),
+            onOpenLevels: onOpenLevels ??
+                (role.canManageLevelsAndClasses ? () {} : null),
+            onOpenClasses: onOpenClasses ??
+                (role.canManageLevelsAndClasses ? () {} : null),
             onOpenProfile: onOpenProfile ?? () {},
             onSignOut: onSignOut ?? () {},
           ),
@@ -66,15 +72,19 @@ void main() {
     expect(find.text('Sair'), findsOneWidget);
     expect(find.text('Usuários'), findsNothing);
     expect(find.text('Formulários'), findsNothing);
+    expect(find.text('Níveis'), findsNothing);
+    expect(find.text('Turmas'), findsNothing);
   });
 
-  testWidgets('gestão: Usuários e Formulários quando canManageUsers',
+  testWidgets('gestão: Usuários, Formulários, Níveis e Turmas',
       (tester) async {
     await pumpMenu(tester, role: UserRole.gestao);
 
     expect(find.text('Incidentes'), findsOneWidget);
     expect(find.text('Usuários'), findsOneWidget);
     expect(find.text('Formulários'), findsOneWidget);
+    expect(find.text('Níveis'), findsOneWidget);
+    expect(find.text('Turmas'), findsOneWidget);
     expect(find.text('Crianças'), findsOneWidget);
   });
 
@@ -89,6 +99,8 @@ void main() {
     expect(find.text('Crianças'), findsNothing);
     expect(find.text('Usuários'), findsNothing);
     expect(find.text('Formulários'), findsNothing);
+    expect(find.text('Níveis'), findsNothing);
+    expect(find.text('Turmas'), findsNothing);
   });
 
   testWidgets('atalho de módulo chama onSelectModule', (tester) async {

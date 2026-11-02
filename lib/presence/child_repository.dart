@@ -30,17 +30,26 @@ class ChildRepository {
     return docRef.id;
   }
 
-  /// Updates `name` and/or `active`. Pass only the fields that changed;
-  /// `updatedBy`/`updatedAt` are always stamped. Never hard-deletes (see
-  /// CONTEXT.md "Inativação de criança").
+  /// Updates `name`, `active`, `levelId` and/or `classId`. Pass only the
+  /// fields that changed; `updatedBy`/`updatedAt` are always stamped.
+  /// Never hard-deletes (see CONTEXT.md "Inativação de criança").
+  ///
+  /// When [classId] changes, syncs `classes.childIds` (remove from previous
+  /// turma, add to the new one). Nullability: use [clearLevelId] /
+  /// [clearClassId] to unset.
   Future<void> updateChild({
     required String childId,
     required String updatedBy,
     String? name,
     bool? active,
+    String? levelId,
+    bool clearLevelId = false,
+    String? classId,
+    bool clearClassId = false,
   }) async {
+    final now = FieldValue.serverTimestamp();
     final fields = <String, dynamic>{
-      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedAt': now,
       'updatedBy': updatedBy,
     };
     if (name != null) {
@@ -49,7 +58,45 @@ class ChildRepository {
     if (active != null) {
       fields['active'] = active;
     }
-    await _children.doc(childId).update(fields);
+    if (clearLevelId) {
+      fields['levelId'] = null;
+    } else if (levelId != null) {
+      fields['levelId'] = levelId;
+    }
+
+    final touchesClass = clearClassId || classId != null;
+    if (!touchesClass) {
+      await _children.doc(childId).update(fields);
+      return;
+    }
+
+    final childDoc = await _children.doc(childId).get();
+    final previousClassId = childDoc.data()?['classId'] as String?;
+    final nextClassId = clearClassId ? null : classId;
+    fields['classId'] = nextClassId;
+
+    if (previousClassId == nextClassId) {
+      await _children.doc(childId).update(fields);
+      return;
+    }
+
+    final batch = _firestore.batch();
+    batch.update(_children.doc(childId), fields);
+    if (previousClassId != null) {
+      batch.update(_firestore.collection('classes').doc(previousClassId), {
+        'childIds': FieldValue.arrayRemove([childId]),
+        'updatedAt': now,
+        'updatedBy': updatedBy,
+      });
+    }
+    if (nextClassId != null) {
+      batch.update(_firestore.collection('classes').doc(nextClassId), {
+        'childIds': FieldValue.arrayUnion([childId]),
+        'updatedAt': now,
+        'updatedBy': updatedBy,
+      });
+    }
+    await batch.commit();
   }
 
   /// Substitui o conjunto de responsáveis da criança. Não toca

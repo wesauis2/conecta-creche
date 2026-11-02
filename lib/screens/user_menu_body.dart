@@ -15,6 +15,8 @@ class UserMenuBody extends StatelessWidget {
     this.onOpenUsers,
     this.onOpenChildren,
     this.onOpenForms,
+    this.onOpenLevels,
+    this.onOpenClasses,
   });
 
   final UserProfile profile;
@@ -29,6 +31,8 @@ class UserMenuBody extends StatelessWidget {
   final VoidCallback? onOpenUsers;
   final VoidCallback? onOpenChildren;
   final VoidCallback? onOpenForms;
+  final VoidCallback? onOpenLevels;
+  final VoidCallback? onOpenClasses;
 
   @override
   Widget build(BuildContext context) {
@@ -99,6 +103,20 @@ class UserMenuBody extends StatelessWidget {
             leading: const Icon(Icons.dynamic_form_outlined),
             title: const Text('Formulários'),
             onTap: onOpenForms,
+          ),
+        if (onOpenLevels != null)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.layers_outlined),
+            title: const Text('Níveis'),
+            onTap: onOpenLevels,
+          ),
+        if (onOpenClasses != null)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.groups_outlined),
+            title: const Text('Turmas'),
+            onTap: onOpenClasses,
           ),
         ListTile(
           contentPadding: EdgeInsets.zero,

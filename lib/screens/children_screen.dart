@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../classes/class_repository.dart';
+import '../classes/school_class.dart';
+import '../levels/level.dart';
+import '../levels/level_repository.dart';
 import '../presence/child.dart';
 import '../presence/child_repository.dart';
 import '../users/user_profile.dart';
@@ -15,6 +19,8 @@ class ChildrenScreen extends StatefulWidget {
     required this.profile,
     required this.childRepository,
     this.userRepository,
+    this.levelRepository,
+    this.classRepository,
   });
 
   final UserProfile profile;
@@ -23,6 +29,10 @@ class ChildrenScreen extends StatefulWidget {
   /// Necessário para gestão+ vincular responsáveis; ausente em testes
   /// focados só no catálogo.
   final UserRepository? userRepository;
+
+  /// Gestão+ seleciona nível/turma na ficha; opcional em testes de catálogo.
+  final LevelRepository? levelRepository;
+  final ClassRepository? classRepository;
 
   @override
   State<ChildrenScreen> createState() => _ChildrenScreenState();
@@ -52,6 +62,59 @@ class _ChildrenScreenState extends State<ChildrenScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Não foi possível salvar o nome: $error')),
+        );
+      }
+    }
+  }
+
+  Future<void> _editLevelAndClass(Child child) async {
+    final levelRepository = widget.levelRepository;
+    final classRepository = widget.classRepository;
+    if (levelRepository == null || classRepository == null) {
+      return;
+    }
+
+    final result = await showDialog<_PlacementDraft>(
+      context: context,
+      builder: (context) => _SelectPlacementDialog(
+        levelRepository: levelRepository,
+        classRepository: classRepository,
+        childName: child.name,
+        initialLevelId: child.levelId,
+        initialClassId: child.classId,
+      ),
+    );
+
+    if (result == null || !mounted) {
+      return;
+    }
+
+    final sameLevel = result.levelId == child.levelId;
+    final sameClass = result.classId == child.classId;
+    if (sameLevel && sameClass) {
+      return;
+    }
+
+    try {
+      await widget.childRepository.updateChild(
+        childId: child.id,
+        updatedBy: widget.profile.uid,
+        levelId: result.levelId,
+        clearLevelId: result.levelId == null,
+        classId: result.classId,
+        clearClassId: result.classId == null,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Nível/turma de ${child.name} atualizados.')),
+        );
+      }
+    } on Object catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Não foi possível salvar nível/turma: $error'),
+          ),
         );
       }
     }
@@ -181,6 +244,9 @@ class _ChildrenScreenState extends State<ChildrenScreen> {
     final canInactivate = widget.profile.role.canInactivateChild;
     final canManageLinks =
         canInactivate && widget.userRepository != null;
+    final canManagePlacement = widget.profile.role.canManageLevelsAndClasses &&
+        widget.levelRepository != null &&
+        widget.classRepository != null;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Crianças')),
@@ -222,59 +288,203 @@ class _ChildrenScreenState extends State<ChildrenScreen> {
             );
           }
 
-          return ListView.separated(
-            padding: const EdgeInsets.fromLTRB(8, 8, 8, 24),
-            itemCount: children.length,
-            separatorBuilder: (_, _) => const Divider(height: 1),
-            itemBuilder: (context, index) {
-              final child = children[index];
-              final subtitleParts = <String>[
-                if (!child.active) 'Inativa',
-                if (canManageLinks)
-                  child.responsibleUids.isEmpty
-                      ? 'Sem responsáveis'
-                      : '${child.responsibleUids.length} '
-                          'responsável${child.responsibleUids.length == 1 ? '' : 'eis'}',
-              ];
-              return ListTile(
-                title: Text(child.name),
-                subtitle: subtitleParts.isEmpty
-                    ? null
-                    : Text(subtitleParts.join(' · ')),
-                leading: CircleAvatar(
-                  child: Text(
-                    child.name.isNotEmpty ? child.name[0].toUpperCase() : '?',
-                  ),
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (canManageLinks)
-                      IconButton(
-                        tooltip: 'Responsáveis',
-                        onPressed: () => _editResponsibles(child),
-                        icon: const Icon(Icons.link),
-                      ),
-                    if (canInactivate)
-                      IconButton(
-                        tooltip: child.active ? 'Inativar' : 'Reativar',
-                        onPressed: () => child.active
-                            ? _confirmInactivate(child)
-                            : _setActive(child, true),
-                        icon: Icon(
-                          child.active
-                              ? Icons.block_outlined
-                              : Icons.restore_outlined,
+          return StreamBuilder<List<Level>>(
+            stream: widget.levelRepository?.watchLevels() ??
+                Stream.value(const <Level>[]),
+            builder: (context, levelsSnap) {
+              final levelsById = <String, Level>{
+                for (final level in levelsSnap.data ?? const <Level>[])
+                  level.id: level,
+              };
+              return StreamBuilder<List<SchoolClass>>(
+                stream: widget.classRepository?.watchClasses() ??
+                    Stream.value(const <SchoolClass>[]),
+                builder: (context, classesSnap) {
+                  final classesById = <String, SchoolClass>{
+                    for (final c in classesSnap.data ?? const <SchoolClass>[])
+                      c.id: c,
+                  };
+
+                  return ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 24),
+                    itemCount: children.length,
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final child = children[index];
+                      final levelName = child.levelId == null
+                          ? null
+                          : levelsById[child.levelId!]?.name;
+                      final classLabel = child.classId == null
+                          ? null
+                          : classesById[child.classId!]?.displayLabel;
+                      final subtitleParts = <String>[
+                        if (!child.active) 'Inativa',
+                        if (levelName != null) levelName,
+                        if (classLabel != null) classLabel,
+                        if (canManageLinks)
+                          child.responsibleUids.isEmpty
+                              ? 'Sem responsáveis'
+                              : '${child.responsibleUids.length} '
+                                  'responsável'
+                                  '${child.responsibleUids.length == 1 ? '' : 'eis'}',
+                      ];
+                      return ListTile(
+                        title: Text(child.name),
+                        subtitle: subtitleParts.isEmpty
+                            ? null
+                            : Text(subtitleParts.join(' · ')),
+                        leading: CircleAvatar(
+                          child: Text(
+                            child.name.isNotEmpty
+                                ? child.name[0].toUpperCase()
+                                : '?',
+                          ),
                         ),
-                      ),
-                  ],
-                ),
-                onTap: () => _editName(child),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (canManagePlacement)
+                              IconButton(
+                                tooltip: 'Nível e turma',
+                                onPressed: () => _editLevelAndClass(child),
+                                icon: const Icon(Icons.school_outlined),
+                              ),
+                            if (canManageLinks)
+                              IconButton(
+                                tooltip: 'Responsáveis',
+                                onPressed: () => _editResponsibles(child),
+                                icon: const Icon(Icons.link),
+                              ),
+                            if (canInactivate)
+                              IconButton(
+                                tooltip:
+                                    child.active ? 'Inativar' : 'Reativar',
+                                onPressed: () => child.active
+                                    ? _confirmInactivate(child)
+                                    : _setActive(child, true),
+                                icon: Icon(
+                                  child.active
+                                      ? Icons.block_outlined
+                                      : Icons.restore_outlined,
+                                ),
+                              ),
+                          ],
+                        ),
+                        onTap: () => _editName(child),
+                      );
+                    },
+                  );
+                },
               );
             },
           );
         },
       ),
+    );
+  }
+}
+
+class _PlacementDraft {
+  const _PlacementDraft({this.levelId, this.classId});
+
+  final String? levelId;
+  final String? classId;
+}
+
+class _SelectPlacementDialog extends StatefulWidget {
+  const _SelectPlacementDialog({
+    required this.levelRepository,
+    required this.classRepository,
+    required this.childName,
+    this.initialLevelId,
+    this.initialClassId,
+  });
+
+  final LevelRepository levelRepository;
+  final ClassRepository classRepository;
+  final String childName;
+  final String? initialLevelId;
+  final String? initialClassId;
+
+  @override
+  State<_SelectPlacementDialog> createState() => _SelectPlacementDialogState();
+}
+
+class _SelectPlacementDialogState extends State<_SelectPlacementDialog> {
+  late String? _levelId = widget.initialLevelId;
+  late String? _classId = widget.initialClassId;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('Nível e turma de ${widget.childName}'),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            StreamBuilder<List<Level>>(
+              stream: widget.levelRepository.watchLevels(activeOnly: true),
+              builder: (context, snapshot) {
+                final levels = snapshot.data ?? const <Level>[];
+                return DropdownButtonFormField<String?>(
+                  // ignore: deprecated_member_use
+                  value: _levelId,
+                  decoration: const InputDecoration(labelText: 'Nível'),
+                  items: [
+                    const DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text('Sem nível'),
+                    ),
+                    for (final level in levels)
+                      DropdownMenuItem<String?>(
+                        value: level.id,
+                        child: Text(level.name),
+                      ),
+                  ],
+                  onChanged: (value) => setState(() => _levelId = value),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            StreamBuilder<List<SchoolClass>>(
+              stream: widget.classRepository.watchClasses(activeOnly: true),
+              builder: (context, snapshot) {
+                final classes = snapshot.data ?? const <SchoolClass>[];
+                return DropdownButtonFormField<String?>(
+                  // ignore: deprecated_member_use
+                  value: _classId,
+                  decoration: const InputDecoration(labelText: 'Turma'),
+                  items: [
+                    const DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text('Sem turma'),
+                    ),
+                    for (final schoolClass in classes)
+                      DropdownMenuItem<String?>(
+                        value: schoolClass.id,
+                        child: Text(schoolClass.displayLabel),
+                      ),
+                  ],
+                  onChanged: (value) => setState(() => _classId = value),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(
+            _PlacementDraft(levelId: _levelId, classId: _classId),
+          ),
+          child: const Text('Salvar'),
+        ),
+      ],
     );
   }
 }

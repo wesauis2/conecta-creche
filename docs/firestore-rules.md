@@ -12,8 +12,12 @@ Regras versionadas em [`firestore.rules`](../firestore.rules). Índices em [`fir
 | `presence_records/{id}` | **read** `signedIn()`; create/close/parecer Cuidador+; admin corrige/apaga | read Cuidador+ **ou** responsável vinculado à criança; writes iguais |
 | `presence_records/{id}/answers/{id}` | **read/write** `signedIn()`; sem hard delete | mesmos leitores do registro; write Cuidador+ (janela 24h no app) |
 | `form_questions/{id}` | **read/write** `signedIn()`; sem hard delete | read Cuidador+; write gestão+ |
+| `levels/{id}` | **read/write** `signedIn()`; sem hard delete | read Cuidador+; write gestão+ |
+| `classes/{id}` | **read/write** `signedIn()`; sem hard delete | read Cuidador+; write gestão+ |
 | `mural_posts/{id}` | **read/write** `signedIn()`; sem hard delete | read rank ≥ responsável + `releasedAt`; write gestão+ |
 | `notifications/{id}` | **read/write** `signedIn()`; sem hard delete | destinatário (+ broadcast); write gestão+ |
+
+**Criança — agrupamento (RF0010):** campos opcionais `children.levelId` / `children.classId`. Turma guarda `year`, `levelIds[]`, `room` (texto opcional), `caregiverUids[]`, `childIds[]`. Ausência de nível/turma **não** bloqueia presença.
 
 Hierarquia (rank): `admin` (4) > `gestao` (3) > `cuidador` (2) > `responsavel` (1) > `convidado` (0). Helpers `isCaregiverPlus()` / `isGestaoPlus()` / `isAdmin()` espelham `lib/users/user_role.dart`. Matriz comentada no topo de `firestore.rules`.
 

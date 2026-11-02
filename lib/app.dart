@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 
 import 'auth/google_auth_service.dart';
 import 'auth/user_sync_gate.dart';
+import 'classes/class_repository.dart';
 import 'forms/form_question_repository.dart';
+import 'levels/level_repository.dart';
 import 'mural/mural_repository.dart';
 import 'mural/notification_repository.dart';
 import 'presence/child_repository.dart';
@@ -22,6 +24,8 @@ class ConectaCrecheApp extends StatelessWidget {
     ChildRepository? childRepository,
     PresenceRepository? presenceRepository,
     FormQuestionRepository? formQuestionRepository,
+    LevelRepository? levelRepository,
+    ClassRepository? classRepository,
     MuralRepository? muralRepository,
     NotificationRepository? notificationRepository,
     this.bootstrapError,
@@ -29,6 +33,8 @@ class ConectaCrecheApp extends StatelessWidget {
         presenceRepository = presenceRepository ?? PresenceRepository(),
         formQuestionRepository =
             formQuestionRepository ?? FormQuestionRepository(),
+        levelRepository = levelRepository ?? LevelRepository(),
+        classRepository = classRepository ?? ClassRepository(),
         muralRepository = muralRepository ?? MuralRepository(),
         notificationRepository =
             notificationRepository ?? NotificationRepository();
@@ -38,6 +44,8 @@ class ConectaCrecheApp extends StatelessWidget {
   final ChildRepository childRepository;
   final PresenceRepository presenceRepository;
   final FormQuestionRepository formQuestionRepository;
+  final LevelRepository levelRepository;
+  final ClassRepository classRepository;
   final MuralPostsRepository muralRepository;
   final NotificationsRepository notificationRepository;
   final Object? bootstrapError;
@@ -69,6 +77,8 @@ class ConectaCrecheApp extends StatelessWidget {
               childRepository: childRepository,
               presenceRepository: presenceRepository,
               formQuestionRepository: formQuestionRepository,
+              levelRepository: levelRepository,
+              classRepository: classRepository,
               muralRepository: muralRepository,
               notificationRepository: notificationRepository,
             ),

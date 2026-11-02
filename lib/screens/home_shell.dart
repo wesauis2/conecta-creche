@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../auth/google_auth_service.dart';
+import '../classes/class_repository.dart';
 import '../forms/form_question_repository.dart';
+import '../levels/level_repository.dart';
 import '../mural/mural_repository.dart';
 import '../mural/notification_repository.dart';
 import '../presence/child_repository.dart';
@@ -11,8 +13,10 @@ import '../users/user_profile.dart';
 import '../users/user_repository.dart';
 import '../users/user_role.dart';
 import 'children_screen.dart';
+import 'classes_screen.dart';
 import 'form_questions_screen.dart';
 import 'incidentes_screen.dart';
+import 'levels_screen.dart';
 import 'mural_screen.dart';
 import 'presence_home_body.dart';
 import 'relatorios_screen.dart';
@@ -33,6 +37,8 @@ class HomeShell extends StatelessWidget {
     required this.childRepository,
     required this.presenceRepository,
     required this.formQuestionRepository,
+    required this.levelRepository,
+    required this.classRepository,
     required this.muralRepository,
     required this.notificationRepository,
   });
@@ -43,6 +49,8 @@ class HomeShell extends StatelessWidget {
   final ChildRepository childRepository;
   final PresenceRepository presenceRepository;
   final FormQuestionRepository formQuestionRepository;
+  final LevelRepository levelRepository;
+  final ClassRepository classRepository;
   final MuralPostsRepository muralRepository;
   final NotificationsRepository notificationRepository;
 
@@ -77,6 +85,8 @@ class HomeShell extends StatelessWidget {
           profile: profile,
           childRepository: childRepository,
           userRepository: userRepository,
+          levelRepository: levelRepository,
+          classRepository: classRepository,
         ),
       ),
     );
@@ -88,6 +98,31 @@ class HomeShell extends StatelessWidget {
         builder: (context) => FormQuestionsScreen(
           profile: profile,
           formQuestionRepository: formQuestionRepository,
+        ),
+      ),
+    );
+  }
+
+  void _openLevels(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => LevelsScreen(
+          profile: profile,
+          levelRepository: levelRepository,
+        ),
+      ),
+    );
+  }
+
+  void _openClasses(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => ClassesScreen(
+          profile: profile,
+          classRepository: classRepository,
+          levelRepository: levelRepository,
+          childRepository: childRepository,
+          userRepository: userRepository,
         ),
       ),
     );
@@ -152,6 +187,12 @@ class HomeShell extends StatelessWidget {
                 : null,
             onOpenForms: profile.role.canConfigureForms
                 ? () => _openForms(context)
+                : null,
+            onOpenLevels: profile.role.canManageLevelsAndClasses
+                ? () => _openLevels(context)
+                : null,
+            onOpenClasses: profile.role.canManageLevelsAndClasses
+                ? () => _openClasses(context)
                 : null,
             onOpenProfile: () => _openProfile(context),
             onSignOut: authService.signOut,

@@ -8,6 +8,8 @@ class Child {
     required this.name,
     required this.active,
     this.responsibleUids = const [],
+    this.levelId,
+    this.classId,
     this.createdAt,
     this.updatedAt,
     this.createdBy,
@@ -21,6 +23,12 @@ class Child {
   /// Uids de usuários `responsavel` vinculados. Índice queryável via
   /// `array-contains` (crianças do uid X).
   final List<String> responsibleUids;
+
+  /// Nível atual (opcional). Ausência não bloqueia presença.
+  final String? levelId;
+
+  /// Turma atual (opcional). Ausência não bloqueia presença.
+  final String? classId;
 
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -38,6 +46,8 @@ class Child {
       name: data['name'] as String,
       active: data['active'] as bool? ?? true,
       responsibleUids: responsibleUids,
+      levelId: data['levelId'] as String?,
+      classId: data['classId'] as String?,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
       createdBy: data['createdBy'] as String?,

@@ -87,11 +87,19 @@ Tab Presença no detalhe do dia (lista filtrável; chegada / ocorrência / saíd
 _Avoid_: Dashboard semanal como home do cuidador
 
 **Gestão de crianças**:
-Tela de catálogo (nome, inativar, vínculos) separada da lista operacional de presença.
+Tela de catálogo (nome, inativar, vínculos, nível/turma opcionais) separada da lista operacional de presença.
 _Avoid_: CRUD inline na lista do dia
 
+**Nível**:
+Rótulo institucional de agrupamento etário/pedagógico (`levels/{id}`: nome, ordem, ativo). Opcional na ficha da criança (`levelId`); sem nível a presença segue normal.
+_Avoid_: Faixa etária rígida obrigatória; hard delete
+
+**Turma**:
+Oferta no ano letivo (`classes/{id}`: ano, níveis, sala como texto opcional, cuidadores, crianças). Vínculo atual na criança via `classId` opcional; sem turma a presença segue normal.
+_Avoid_: Grade horária; histórico completo de transferências na v1
+
 **Visão da gestão**:
-Tab Incidentes (global) + tab Presença agregada (semana/mês Dom–Sáb). Menu para Usuários, Formulários, etc.
+Tab Incidentes (global) + tab Presença agregada (semana/mês Dom–Sáb). Menu para Usuários, Formulários, Níveis, Turmas, etc.
 _Avoid_: Mesma home do cuidador sem incidentes
 
 **Relatórios do responsável**:

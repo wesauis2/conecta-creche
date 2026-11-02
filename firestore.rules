@@ -72,6 +72,8 @@ service cloud.firestore {
     // | presence_records             | Cuidador+; responsável só de vinculados | create/close/parecer Cuidador+; admin corrige/apaga |
     // | presence_records/*/answers   | mesmos leitores do registro        | create/update Cuidador+ (janela 24h no app) |
     // | form_questions               | Cuidador+                          | gestão+                              |
+    // | levels                       | Cuidador+                          | gestão+                              |
+    // | classes                      | Cuidador+                          | gestão+                              |
     // | mural_posts                  | autenticados rank ≥ responsável; respeitar releasedAt | gestão+ |
     // | notifications                | destinatário (+ broadcast)         | gestão+                              |
     // ---------------------------------------------------------------------------
@@ -106,7 +108,15 @@ service cloud.firestore {
     // inclui `responsibleUids`. Final: ver matriz acima.
     function onlyChildFieldsChanged() {
       return request.resource.data.diff(resource.data).affectedKeys()
-        .hasOnly(['name', 'active', 'responsibleUids', 'updatedAt', 'updatedBy']);
+        .hasOnly([
+          'name',
+          'active',
+          'responsibleUids',
+          'levelId',
+          'classId',
+          'updatedAt',
+          'updatedBy',
+        ]);
     }
 
     function childActiveUnchanged() {
@@ -193,6 +203,22 @@ service cloud.firestore {
     // `form_questions` (CONTEXT.md "Formulário configurável").
     // Leva: signed-in create/update. Final: read Cuidador+; write gestão+.
     match /form_questions/{questionId} {
+      allow get, list: if signedIn();
+      allow create, update: if signedIn();
+      allow delete: if false;
+    }
+
+    // `levels` (CONTEXT.md "Nível" / docs/requisitos/niveis-turmas.md).
+    // Leva: signed-in. Final: read Cuidador+; write gestão+.
+    match /levels/{levelId} {
+      allow get, list: if signedIn();
+      allow create, update: if signedIn();
+      allow delete: if false;
+    }
+
+    // `classes` (CONTEXT.md "Turma" — sala como texto opcional na v1).
+    // Leva: signed-in. Final: read Cuidador+; write gestão+.
+    match /classes/{classId} {
       allow get, list: if signedIn();
       allow create, update: if signedIn();
       allow delete: if false;

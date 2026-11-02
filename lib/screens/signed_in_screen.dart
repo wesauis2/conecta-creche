@@ -2,7 +2,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../auth/google_auth_service.dart';
+import '../classes/class_repository.dart';
 import '../forms/form_question_repository.dart';
+import '../levels/level_repository.dart';
 import '../mural/mural_repository.dart';
 import '../mural/notification_repository.dart';
 import '../presence/child_repository.dart';
@@ -21,6 +23,8 @@ class SignedInScreen extends StatelessWidget {
     required this.childRepository,
     required this.presenceRepository,
     required this.formQuestionRepository,
+    required this.levelRepository,
+    required this.classRepository,
     required this.muralRepository,
     required this.notificationRepository,
   });
@@ -31,6 +35,8 @@ class SignedInScreen extends StatelessWidget {
   final ChildRepository childRepository;
   final PresenceRepository presenceRepository;
   final FormQuestionRepository formQuestionRepository;
+  final LevelRepository levelRepository;
+  final ClassRepository classRepository;
   final MuralPostsRepository muralRepository;
   final NotificationsRepository notificationRepository;
 
@@ -71,6 +77,8 @@ class SignedInScreen extends StatelessWidget {
           childRepository: childRepository,
           presenceRepository: presenceRepository,
           formQuestionRepository: formQuestionRepository,
+          levelRepository: levelRepository,
+          classRepository: classRepository,
           muralRepository: muralRepository,
           notificationRepository: notificationRepository,
         );
