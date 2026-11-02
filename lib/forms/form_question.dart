@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 /// Tipo de resposta da pergunta do formulário configurável.
 /// Persistido em Firestore como o `name` (exceto [choiceOther] → `choice_other`).
 enum FormQuestionKind {
@@ -176,6 +174,7 @@ class FormQuestion {
     required this.flags,
     required this.sortIndex,
     required this.active,
+    this.seedKey,
     this.createdAt,
     this.updatedAt,
     this.createdBy,
@@ -190,6 +189,10 @@ class FormQuestion {
   final FormQuestionFlags flags;
   final int sortIndex;
   final bool active;
+
+  /// Chave estável do pacote default (`docs/requisitos/formularios-configuraveis.md`).
+  /// Idempotência do seed sem `--replace`.
+  final String? seedKey;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final String? createdBy;
@@ -248,10 +251,24 @@ class FormQuestion {
       flags: FormQuestionFlags.fromMap(flagsMap),
       sortIndex: (data['sortIndex'] as num?)?.toInt() ?? 0,
       active: data['active'] as bool? ?? true,
-      createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
-      updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
+      seedKey: data['seedKey'] as String?,
+      createdAt: _readDateTime(data['createdAt']),
+      updatedAt: _readDateTime(data['updatedAt']),
       createdBy: data['createdBy'] as String?,
       updatedBy: data['updatedBy'] as String?,
     );
   }
+}
+
+/// Aceita `DateTime` ou Timestamp-like (`toDate()`) sem depender de cloud_firestore
+/// neste arquivo (permite `dart run` do seed sem `dart:ui`).
+DateTime? _readDateTime(Object? value) {
+  if (value == null) return null;
+  if (value is DateTime) return value;
+  try {
+    final dynamic dyn = value;
+    final converted = dyn.toDate();
+    if (converted is DateTime) return converted;
+  } catch (_) {}
+  return null;
 }
