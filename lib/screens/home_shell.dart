@@ -11,6 +11,7 @@ import '../users/user_repository.dart';
 import '../users/user_role.dart';
 import 'children_screen.dart';
 import 'form_questions_screen.dart';
+import 'incidentes_screen.dart';
 import 'module_placeholder_screen.dart';
 import 'mural_screen.dart';
 import 'presence_home_body.dart';
@@ -118,10 +119,9 @@ class HomeShell extends StatelessWidget {
           podePublicar: profile.role.canPublishMural,
         );
       case ShellModule.incidentes:
-        return const ModulePlaceholderScreen(
-          title: 'Incidentes',
-          message:
-              'Em breve a visão global de incidentes da gestão estará aqui.',
+        return IncidentesScreen(
+          presenceRepository: presenceRepository,
+          childRepository: childRepository,
         );
       case ShellModule.relatorios:
         return const ModulePlaceholderScreen(

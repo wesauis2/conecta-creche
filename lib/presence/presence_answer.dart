@@ -110,6 +110,38 @@ class PresenceAnswer {
 
   bool get isIncident => flagsSnapshot.incident;
 
+  /// Rótulo legível do [value] a partir do snapshot das opções.
+  String get displayValue {
+    final v = value;
+    if (v == null) return '';
+    if (v is String) {
+      for (final option in questionSnapshot.options) {
+        if (option.id == v) return option.label;
+      }
+      return v;
+    }
+    if (v is Map) {
+      final map = v is Map<String, dynamic> ? v : Map<String, dynamic>.from(v);
+      final optionId = map['optionId'] as String?;
+      final other = map['other'] as String?;
+      String? label;
+      if (optionId != null) {
+        for (final option in questionSnapshot.options) {
+          if (option.id == optionId) {
+            label = option.label;
+            break;
+          }
+        }
+      }
+      final base = label ?? optionId ?? '';
+      if (other != null && other.trim().isNotEmpty) {
+        return base.isEmpty ? other : '$base — $other';
+      }
+      return base;
+    }
+    return '$v';
+  }
+
   factory PresenceAnswer.fromFirestore(String id, Map<String, dynamic> data) {
     final snapshotRaw = data['questionSnapshot'];
     final snapshotMap = snapshotRaw is Map<String, dynamic>
@@ -161,6 +193,22 @@ class PresenceAnswer {
       'updatedBy': null,
     };
   }
+}
+
+/// Answer com flag de incidente + contexto do registro de presença.
+/// Usado na visão global da gestão (tab Incidentes). Ver CONTEXT.md "Incidente".
+class PresenceIncident {
+  const PresenceIncident({
+    required this.answer,
+    required this.recordId,
+    required this.childId,
+    required this.dayKey,
+  });
+
+  final PresenceAnswer answer;
+  final String recordId;
+  final String childId;
+  final String dayKey;
 }
 
 /// Janela de edição de answers (24h a partir de `createdAt`).

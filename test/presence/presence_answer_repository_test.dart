@@ -203,4 +203,111 @@ void main() {
       expect(answers.map((a) => a.questionSnapshot.id), ['q-early', 'q-late']);
     });
   });
+
+  group('listIncidents', () {
+    test('aggregates only incident-flagged answers across records', () async {
+      final recordA = await repository.registerArrival(
+        childId: 'child-a',
+        dayKey: '2026-08-30',
+        arrivedAt: DateTime.utc(2026, 8, 30, 12),
+        createdBy: 'uid-1',
+      );
+      final recordB = await repository.registerArrival(
+        childId: 'child-b',
+        dayKey: '2026-08-30',
+        arrivedAt: DateTime.utc(2026, 8, 30, 12, 30),
+        createdBy: 'uid-1',
+      );
+
+      await repository.registerAnswer(
+        recordId: recordA,
+        question: _question(id: 'q-incident', incident: true),
+        value: 'sim',
+        recordedPhase: RecordedPhase.duranteDia,
+        createdBy: 'uid-1',
+        recordedAt: DateTime.utc(2026, 8, 30, 14),
+      );
+      await repository.registerAnswer(
+        recordId: recordA,
+        question: _question(id: 'q-normal'),
+        value: 'nao',
+        recordedPhase: RecordedPhase.duranteDia,
+        createdBy: 'uid-1',
+        recordedAt: DateTime.utc(2026, 8, 30, 15),
+      );
+      await repository.registerAnswer(
+        recordId: recordB,
+        question: _question(id: 'q-later-incident', incident: true),
+        value: 'sim',
+        recordedPhase: RecordedPhase.duranteDia,
+        createdBy: 'uid-1',
+        recordedAt: DateTime.utc(2026, 8, 30, 16),
+      );
+
+      final incidents = await repository.listIncidents();
+
+      expect(incidents, hasLength(2));
+      expect(
+        incidents.map((i) => i.answer.questionSnapshot.id).toList(),
+        ['q-later-incident', 'q-incident'],
+      );
+      expect(incidents.first.childId, 'child-b');
+      expect(incidents.first.dayKey, '2026-08-30');
+      expect(incidents.first.recordId, recordB);
+    });
+
+    test('filters by dayKey and childId', () async {
+      final recordToday = await repository.registerArrival(
+        childId: 'child-a',
+        dayKey: '2026-08-30',
+        arrivedAt: DateTime.utc(2026, 8, 30, 12),
+        createdBy: 'uid-1',
+      );
+      final recordOtherDay = await repository.registerArrival(
+        childId: 'child-a',
+        dayKey: '2026-08-29',
+        arrivedAt: DateTime.utc(2026, 8, 29, 12),
+        createdBy: 'uid-1',
+      );
+      final recordOtherChild = await repository.registerArrival(
+        childId: 'child-b',
+        dayKey: '2026-08-30',
+        arrivedAt: DateTime.utc(2026, 8, 30, 13),
+        createdBy: 'uid-1',
+      );
+
+      Future<void> addIncident(String recordId, String qid) =>
+          repository.registerAnswer(
+            recordId: recordId,
+            question: _question(id: qid, incident: true),
+            value: 'sim',
+            recordedPhase: RecordedPhase.duranteDia,
+            createdBy: 'uid-1',
+            recordedAt: DateTime.utc(2026, 8, 30, 14),
+          );
+
+      await addIncident(recordToday, 'q-today-a');
+      await addIncident(recordOtherDay, 'q-other-day');
+      await addIncident(recordOtherChild, 'q-today-b');
+
+      final byDay = await repository.listIncidents(dayKey: '2026-08-30');
+      expect(
+        byDay.map((i) => i.answer.questionSnapshot.id).toSet(),
+        {'q-today-a', 'q-today-b'},
+      );
+
+      final byChild = await repository.listIncidents(childId: 'child-a');
+      expect(
+        byChild.map((i) => i.answer.questionSnapshot.id).toSet(),
+        {'q-today-a', 'q-other-day'},
+      );
+
+      final both = await repository.listIncidents(
+        dayKey: '2026-08-30',
+        childId: 'child-a',
+      );
+      expect(both, hasLength(1));
+      expect(both.single.answer.questionSnapshot.id, 'q-today-a');
+    });
+  });
 }
