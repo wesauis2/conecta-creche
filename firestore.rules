@@ -2,21 +2,157 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function roleDoc(userId) {
+      return get(/databases/$(database)/documents/user_roles/$(userId));
+    }
+
+    function ownRole() {
+      return roleDoc(request.auth.uid).data.role;
+    }
+
+    function rank(role) {
+      return role == 'admin' ? 4
+        : role == 'gestao' ? 3
+        : role == 'cuidador' ? 2
+        : role == 'responsavel' ? 1
+        : 0;
+    }
+
+    function hasRole() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/user_roles/$(request.auth.uid));
+    }
+
+    // Presence access matrix (CONTEXT.md "Cuidador+"): mirrors
+    // canOperatePresence/canInactivateChild/canAdminPresence in
+    // lib/users/user_role.dart.
+    function isCaregiverPlus() {
+      return hasRole() && rank(ownRole()) >= 2;
+    }
+
+    function isGestaoPlus() {
+      return hasRole() && rank(ownRole()) >= 3;
+    }
+
+    function isAdmin() {
+      return hasRole() && rank(ownRole()) == 4;
+    }
+
+    function isManager() {
+      return isGestaoPlus();
+    }
+
+    function isValidRole(role) {
+      return role in ['admin', 'gestao', 'cuidador', 'responsavel', 'convidado'];
+    }
+
+    function onlyRoleFieldsChanged() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['role', 'updatedAt']);
+    }
+
     match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow create, update: if request.auth != null
-        && request.auth.uid == userId
+      allow get, list: if isOwner(userId) || isManager();
+      allow create, update: if isOwner(userId)
         && !request.resource.data.keys().hasAny(['role']);
       allow delete: if false;
     }
 
     match /user_roles/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow create: if request.auth != null
-        && request.auth.uid == userId
+      allow get, list: if isOwner(userId) || isManager();
+
+      allow create: if isOwner(userId)
         && !exists(/databases/$(database)/documents/user_roles/$(userId))
         && request.resource.data.role == 'convidado';
-      allow update, delete: if false;
+
+      allow update: if isManager()
+        && request.auth.uid != userId
+        && onlyRoleFieldsChanged()
+        && isValidRole(request.resource.data.role)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && rank(resource.data.role) <= rank(ownRole())
+        && rank(request.resource.data.role) <= rank(ownRole());
+
+      allow delete: if false;
+    }
+
+    // `children` catalog (CONTEXT.md "Criança" / "Gestão de crianças").
+    // Cuidador+ create/rename; only gestão+ flips `active`; no hard delete.
+    function onlyChildFieldsChanged() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['name', 'active', 'updatedAt', 'updatedBy']);
+    }
+
+    function childActiveUnchanged() {
+      return request.resource.data.active == resource.data.active;
+    }
+
+    match /children/{childId} {
+      allow get, list: if isCaregiverPlus();
+
+      allow create: if isCaregiverPlus()
+        && request.resource.data.name is string
+        && request.resource.data.active == true
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.updatedBy == request.auth.uid;
+
+      allow update: if isCaregiverPlus()
+        && onlyChildFieldsChanged()
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.createdBy == resource.data.createdBy
+        && (childActiveUnchanged() || isGestaoPlus());
+
+      allow delete: if false;
+    }
+
+    // `presence_records` (CONTEXT.md "Registro de presença" / "Chegada" /
+    // "Saída" / "Parecer"). Cuidador+ create chegada, close with parecer and
+    // edit parecer afterwards; `childId`/`dayKey`/`arrivedAt` and an already
+    // set `departedAt` are immutable outside admin; only admin can alter
+    // arrivedAt/departedAt or hard-delete.
+    function presenceCoreFieldsUnchanged() {
+      return request.resource.data.childId == resource.data.childId
+        && request.resource.data.dayKey == resource.data.dayKey
+        && request.resource.data.arrivedAt == resource.data.arrivedAt;
+    }
+
+    function isPresenceClosing() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['departedAt', 'isOpen', 'parecer', 'updatedAt', 'updatedBy'])
+        && resource.data.departedAt == null
+        && request.resource.data.departedAt != null
+        && request.resource.data.isOpen == false;
+    }
+
+    function isPresenceParecerEdit() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['parecer', 'updatedAt', 'updatedBy'])
+        && resource.data.departedAt != null;
+    }
+
+    match /presence_records/{recordId} {
+      allow get, list: if isCaregiverPlus();
+
+      allow create: if isCaregiverPlus()
+        && request.resource.data.departedAt == null
+        && request.resource.data.isOpen == true
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.updatedBy == request.auth.uid;
+
+      allow update: if isAdmin()
+        || (isCaregiverPlus()
+            && presenceCoreFieldsUnchanged()
+            && (isPresenceClosing() || isPresenceParecerEdit()));
+
+      allow delete: if isAdmin();
     }
   }
 }

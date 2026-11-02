@@ -32,4 +32,6 @@ class UserProfile {
   }
 
   bool get isPendingApproval => role == UserRole.convidado;
+
+  bool get canManageUsers => role.canManageUsers;
 }
