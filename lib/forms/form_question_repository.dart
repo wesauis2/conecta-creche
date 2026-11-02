@@ -21,6 +21,7 @@ class FormQuestionRepository {
     FormQuestionFlags flags = const FormQuestionFlags(),
     int? sortIndex,
     bool active = true,
+    String? seedKey,
   }) async {
     final now = FieldValue.serverTimestamp();
     final resolvedSort = sortIndex ?? await _nextSortIndex();
@@ -32,6 +33,7 @@ class FormQuestionRepository {
       'flags': flags.toMap(),
       'sortIndex': resolvedSort,
       'active': active,
+      if (seedKey != null) 'seedKey': seedKey,
       'createdAt': now,
       'updatedAt': now,
       'createdBy': createdBy,
@@ -65,6 +67,8 @@ class FormQuestionRepository {
     FormQuestionFlags? flags,
     int? sortIndex,
     bool? active,
+    String? seedKey,
+    bool clearSeedKey = false,
   }) async {
     final fields = <String, dynamic>{
       'updatedAt': FieldValue.serverTimestamp(),
@@ -92,6 +96,11 @@ class FormQuestionRepository {
     }
     if (active != null) {
       fields['active'] = active;
+    }
+    if (clearSeedKey) {
+      fields['seedKey'] = null;
+    } else if (seedKey != null) {
+      fields['seedKey'] = seedKey;
     }
     await _questions.doc(questionId).update(fields);
   }
