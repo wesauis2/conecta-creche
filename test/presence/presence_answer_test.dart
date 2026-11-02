@@ -58,6 +58,31 @@ void main() {
     });
   });
 
+  group('PresenceAnswer.displayValue media', () {
+    test('labels structured media maps', () {
+      final answer = PresenceAnswer.fromFirestore('a-media', {
+        'questionSnapshot': {
+          'id': 'q-img',
+          'prompt': 'Foto?',
+          'kind': 'image',
+          'options': <Object>[],
+          'defaultOptionId': null,
+        },
+        'value': {
+          'mime': 'image/jpeg',
+          'bytesBase64': 'aGVsbG8=',
+          'width': 64,
+          'height': 48,
+        },
+        'flagsSnapshot': const <String, dynamic>{},
+        'recordedPhase': 'durante_dia',
+      });
+
+      expect(answer.displayValue, contains('Imagem'));
+      expect(answer.displayValue, contains('64×48'));
+    });
+  });
+
   group('PresenceAnswer.toCreateMap', () {
     test('writes snapshots, phase, value and create audit; update fields null',
         () {

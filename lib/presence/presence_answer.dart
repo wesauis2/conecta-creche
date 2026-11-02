@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../forms/form_media_answer.dart';
 import '../forms/form_question.dart';
 
 /// Fase em que a resposta foi registrada. Ver CONTEXT.md "Resposta (answer)".
@@ -98,7 +99,8 @@ class PresenceAnswer {
   final String id;
   final QuestionSnapshot questionSnapshot;
 
-  /// Valor conforme [FormQuestionKind] (optionId, texto, mapa choice_other, refs).
+  /// Valor conforme [FormQuestionKind] (optionId, texto, choice_other,
+  /// [FormMediaAnswer] mapa para imagem/áudio/vídeo).
   final Object? value;
   final FormQuestionFlags flagsSnapshot;
   final RecordedPhase recordedPhase;
@@ -122,8 +124,12 @@ class PresenceAnswer {
     }
     if (v is Map) {
       final map = v is Map<String, dynamic> ? v : Map<String, dynamic>.from(v);
+      final media = FormMediaAnswer.tryParse(map);
+      if (media != null) {
+        return media.displayLabel;
+      }
       final optionId = map['optionId'] as String?;
-      final other = map['other'] as String?;
+      final other = (map['otherText'] ?? map['other']) as String?;
       String? label;
       if (optionId != null) {
         for (final option in questionSnapshot.options) {
