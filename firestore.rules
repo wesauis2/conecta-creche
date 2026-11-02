@@ -183,5 +183,14 @@ service cloud.firestore {
       allow create, update: if signedIn();
       allow delete: if false;
     }
+
+    // `notifications` (CONTEXT.md "Mural" — registro local; FCM depois).
+    // Intenção: destinatário lê as próprias (+ broadcast); write gestão+.
+    // Durante a leva: permissivo (signed-in); enxugar no fim.
+    match /notifications/{notificationId} {
+      allow get, list: if signedIn();
+      allow create, update: if signedIn();
+      allow delete: if false;
+    }
   }
 }

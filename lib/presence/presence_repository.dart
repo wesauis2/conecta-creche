@@ -111,6 +111,18 @@ class PresenceRepository {
     );
   }
 
+  /// Registros de uma criança, ordenados por `arrivedAt` (mais recente
+  /// primeiro). Usado no feed misto do mural do responsável.
+  Future<List<PresenceRecord>> listByChildId({required String childId}) async {
+    final snapshot =
+        await _records.where('childId', isEqualTo: childId).get();
+    final records = snapshot.docs
+        .map((doc) => PresenceRecord.fromFirestore(doc.id, doc.data()))
+        .toList();
+    records.sort((a, b) => b.arrivedAt.compareTo(a.arrivedAt));
+    return records;
+  }
+
   /// Records for a civil day, ordered by `arrivedAt`. Pass [isOpen] to
   /// restrict to open (Presentes) or closed (Saíram) records.
   Future<List<PresenceRecord>> listByDayKey({
