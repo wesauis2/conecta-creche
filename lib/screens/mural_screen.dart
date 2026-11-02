@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../mural/app_notification.dart';
 import '../mural/mural_feed.dart';
 import '../mural/mural_post.dart';
+import '../mural/mural_read.dart';
+import '../mural/mural_reads_repository.dart';
 import '../mural/mural_repository.dart';
 import '../presence/child_repository.dart';
 import '../presence/presence_repository.dart';
@@ -19,6 +22,7 @@ class MuralScreen extends StatefulWidget {
     required this.authorUid,
     this.role = UserRole.convidado,
     this.notificationRepository,
+    this.muralReadsRepository,
     this.childRepository,
     this.presenceRepository,
     this.podePublicar = false,
@@ -30,6 +34,7 @@ class MuralScreen extends StatefulWidget {
   final String authorUid;
   final UserRole role;
   final NotificationsRepository? notificationRepository;
+  final MuralReadsRepository? muralReadsRepository;
   final ChildRepository? childRepository;
   final PresenceRepository? presenceRepository;
   final bool podePublicar;
@@ -203,6 +208,48 @@ class _MuralScreenState extends State<MuralScreen> {
       setState(() => _loadingMore = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Não foi possível carregar mais: $error')),
+      );
+    }
+  }
+
+  void _toggleExpanded(MuralFeedItem item) {
+    final wasExpanded = _expandedIds.contains(item.id);
+    setState(() {
+      if (wasExpanded) {
+        _expandedIds.remove(item.id);
+      } else {
+        _expandedIds.add(item.id);
+      }
+    });
+    if (!wasExpanded) {
+      _recordReadOnExpand(item);
+    }
+  }
+
+  void _recordReadOnExpand(MuralFeedItem item) {
+    final reads = widget.muralReadsRepository;
+    if (reads == null) return;
+
+    if (item.kind == MuralFeedItemKind.post && item.post != null) {
+      reads.recordRead(
+        postId: item.post!.id,
+        uid: widget.authorUid,
+        channel: MuralReadChannel.mural,
+      );
+      return;
+    }
+
+    if (item.kind == MuralFeedItemKind.notification) {
+      final notif = item.notification;
+      if (notif == null) return;
+      if (notif.sourceType != NotificationSourceType.muralPost) return;
+      final postId = notif.sourceId;
+      if (postId == null || postId.isEmpty) return;
+      reads.recordRead(
+        postId: postId,
+        uid: widget.authorUid,
+        channel: MuralReadChannel.notification,
+        notificationId: notif.id,
       );
     }
   }
@@ -393,23 +440,25 @@ class _MuralScreenState extends State<MuralScreen> {
 
                       final item = visiveis[postIndex];
                       final expanded = _expandedIds.contains(item.id);
+                      final showReadCount = widget.podePublicar &&
+                          item.kind == MuralFeedItemKind.post &&
+                          item.post != null &&
+                          widget.muralReadsRepository != null;
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 12),
                         child: _MuralFeedTile(
                           key: ValueKey(item.id),
                           item: item,
                           expanded: expanded,
-                          onToggle: () => setState(() {
-                            if (expanded) {
-                              _expandedIds.remove(item.id);
-                            } else {
-                              _expandedIds.add(item.id);
-                            }
-                          }),
+                          onToggle: () => _toggleExpanded(item),
                           onEdit: widget.podePublicar &&
                                   item.kind == MuralFeedItemKind.post &&
                                   item.post != null
                               ? () => _novaPublicacao(existing: item.post)
+                              : null,
+                          readerCountStream: showReadCount
+                              ? widget.muralReadsRepository!
+                                  .watchReaderCount(item.post!.id)
                               : null,
                         ),
                       );
@@ -434,12 +483,14 @@ class _MuralFeedTile extends StatelessWidget {
     required this.expanded,
     required this.onToggle,
     this.onEdit,
+    this.readerCountStream,
   });
 
   final MuralFeedItem item;
   final bool expanded;
   final VoidCallback onToggle;
   final VoidCallback? onEdit;
+  final Stream<int>? readerCountStream;
 
   IconData get _icon => switch (item.kind) {
         MuralFeedItemKind.post =>
@@ -559,6 +610,25 @@ class _MuralFeedTile extends StatelessWidget {
                     style: textTheme.bodySmall
                         ?.copyWith(color: scheme.onSurfaceVariant),
                   ),
+                  if (readerCountStream != null) ...[
+                    const SizedBox(height: 8),
+                    StreamBuilder<int>(
+                      stream: readerCountStream,
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const SizedBox.shrink();
+                        }
+                        final count = snapshot.data!;
+                        return Text(
+                          count == 1 ? '1 lido' : '$count lidos',
+                          style: textTheme.labelMedium?.copyWith(
+                            color: scheme.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                 ],
                 if (onEdit != null) ...[
                   const SizedBox(height: 8),
