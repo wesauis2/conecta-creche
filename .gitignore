@@ -1,4 +1,4 @@
-# Agent backlog tickets (disposable work queue; specs live under docs/backlog/)
+# Agent scratch (tickets descartáveis; requisitos em docs/requisitos/)
 .scratch/
 
 # Flutter / Dart build artifacts
@@ -31,3 +31,7 @@ secrets/
 # Keep the committed compile-time stub; ignore any other generated options files.
 lib/firebase_options_*.dart
 !lib/firebase_options_stub.dart
+
+# Requisitos locais por feature + backlog legado (não versionar)
+docs/requisitos/
+docs/backlog/

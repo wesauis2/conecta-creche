@@ -2,7 +2,7 @@
 
 Canal entre a rotina diária na creche e os pais de crianças de 1 a 5 anos — presença, avisos, relatórios e mais no produto completo.
 
-**Esta semana:** fundação técnica com Firebase por desenvolvedor, login Google, modelo mínimo de usuários e perfil. Ver [`docs/backlog/conecta-creche/SPEC.md`](docs/backlog/conecta-creche/SPEC.md).
+Glossário de domínio: [`CONTEXT.md`](CONTEXT.md). Requisitos técnicos por feature (locais): `docs/requisitos/`.
 
 ## Credenciais locais
 
