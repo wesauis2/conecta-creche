@@ -13,7 +13,7 @@ Regras versionadas em [`firestore.rules`](../firestore.rules). Índices em [`fir
 | `presence_records/{id}/answers/{id}` | mesmos leitores do registro | create/update Cuidador+ (janela 24h no app) |
 | `form_questions/{id}` | Cuidador+ | gestão+ |
 | `mural_posts/{id}` | rank ≥ responsável + `releasedAt` (gestão+ vê pré-liberação) | gestão+ |
-| `notifications/{id}` | destinatário (`userId`) ou broadcast (`userId` ausente/null) | gestão+ |
+| `notifications/{id}` | destinatário (`userId`) ou broadcast (`userId` ausente/null) | gestão+; Cuidador+ **create** se `sourceType == incident` |
 | `fcm_tokens/{id}` | dono (`uid`) | dono |
 | `levels` / `classes` / `classrooms` | Cuidador+ | gestão+ |
 | `mural_reads/{id}` | dono; gestão+ lista | dono (próprio `uid`) |
@@ -131,7 +131,8 @@ Use o playground (Firestore → Regras) ou a CLI.
 | Ler notification alheia | `notifications` | `n2` (`userId`=`outro`) | `resp1` | get | **Negado** |
 | Ler broadcast | `notifications` | `n3` (sem `userId`) | `resp1` | get | **Permitido** |
 | Criar notification (gestão) | `notifications` | `n1` | `mgr1` | create | **Permitido** |
-| Criar notification (cuidador) | `notifications` | `n1` | `cui1` | create | **Negado** |
+| Criar notification de incidente (cuidador) | `notifications` | `n1` (`sourceType=incident`) | `cui1` | create | **Permitido** |
+| Criar notification genérica (cuidador) | `notifications` | `n1` (sem incidente) | `cui1` | create | **Negado** |
 | fcm_token dono | `fcm_tokens` | `t1` (`uid`=`u1`) | `u1` | create / get | **Permitido** |
 | fcm_token alheio | `fcm_tokens` | `t1` | `u2` | get | **Negado** |
 | levels read (cuidador) | `levels` | — | `cui1` | get | **Permitido** |

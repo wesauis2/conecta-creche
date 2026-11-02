@@ -124,7 +124,7 @@ service cloud.firestore {
     // | presence_records/*/answers   | mesmos leitores do registro        | create/update Cuidador+ (janela 24h no app) |
     // | form_questions               | Cuidador+                          | gestão+                              |
     // | mural_posts                  | rank ≥ responsável + releasedAt; gestão+ vê pré-liberação | gestão+ |
-    // | notifications                | destinatário (+ broadcast)         | gestão+                              |
+    // | notifications                | destinatário (+ broadcast)         | gestão+; Cuidador+ create se sourceType=incident |
     // | fcm_tokens                   | dono                               | dono                                 |
     // | levels / classes / classrooms| Cuidador+                          | gestão+                              |
     // | mural_reads                  | dono; gestão+ lista                | dono (próprio uid)                   |
@@ -276,11 +276,14 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // `notifications` (CONTEXT.md "Mural" — registro local; FCM depois).
-    // Destinatário lê as próprias (+ broadcast sem userId); write gestão+.
+    // `notifications` (feed + FCM). Destinatário lê as próprias (+ broadcast).
+    // Write: gestão+; Cuidador+ só create de incidente (sourceType == incident).
     match /notifications/{notificationId} {
       allow get, list: if canReadNotification();
-      allow create, update: if isGestaoPlus();
+      allow create: if isGestaoPlus()
+        || (isCaregiverPlus()
+            && request.resource.data.sourceType == 'incident');
+      allow update: if isGestaoPlus();
       allow delete: if false;
     }
 
