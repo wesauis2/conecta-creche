@@ -12,6 +12,7 @@ import '../presence/presence_repository.dart';
 import '../users/user_profile.dart';
 import '../users/user_repository.dart';
 import 'children_screen.dart';
+import 'exit_form_screen.dart';
 import 'occurrence_form_screen.dart';
 import 'parecer_form_screen.dart';
 
@@ -291,13 +292,35 @@ class _PresenceDayScreenState extends State<PresenceDayScreen> {
   }
 
   Future<void> _confirmDeparture(Child child, PresenceRecord open) async {
+    final useExitForm = widget.formQuestionRepository != null;
     final confirmed = await _confirm(
       title: 'Registrar saída?',
-      body: 'Confirma a saída de ${child.name} agora? '
-          'Em seguida você preenche o parecer.',
+      body: useExitForm
+          ? 'Confirma a saída de ${child.name} agora? '
+              'Em seguida você preenche o formulário de saída.'
+          : 'Confirma a saída de ${child.name} agora? '
+              'Em seguida você preenche o parecer.',
       okLabel: 'Registrar saída',
     );
     if (!confirmed || !mounted) {
+      return;
+    }
+
+    if (useExitForm) {
+      final closed = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (context) => ExitFormScreen(
+            profile: widget.profile,
+            recordId: open.id,
+            childName: child.name,
+            formQuestionRepository: widget.formQuestionRepository!,
+            presenceRepository: widget.presenceRepository,
+          ),
+        ),
+      );
+      if (closed == true && mounted) {
+        setState(() => _filter = _PresenceFilter.sairam);
+      }
       return;
     }
 

@@ -210,3 +210,15 @@ class PresenceRecordClosedException implements Exception {
   String toString() =>
       'PresenceRecordClosedException: registro $recordId está fechado';
 }
+
+/// Rascunho de resposta a gravar no momento da saída
+/// (`recordedPhase=saida`). Ver docs/requisitos/presenca-rotina.md.
+class DepartureAnswerDraft {
+  const DepartureAnswerDraft({
+    required this.question,
+    required this.value,
+  });
+
+  final FormQuestion question;
+  final Object? value;
+}

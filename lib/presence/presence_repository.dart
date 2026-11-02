@@ -67,14 +67,41 @@ class PresenceRepository {
     });
   }
 
-  /// Registers a saída with its parecer, closing the open record.
+  /// Registers a saída: grava answers com `recordedPhase=saida` (se houver),
+  /// depois fecha o registro (`departedAt`, `isOpen: false`).
+  ///
+  /// [parecer] permanece como compat legado; preferir [answers] do formulário
+  /// configurável. Recusa se o registro já estiver fechado.
   /// Never changes `childId`/`dayKey`/`arrivedAt` (admin-only elsewhere).
   Future<void> registerDeparture({
     required String recordId,
     required DateTime departedAt,
-    required Parecer parecer,
     required String updatedBy,
+    Parecer? parecer,
+    List<DepartureAnswerDraft>? answers,
   }) async {
+    final recordSnap = await _records.doc(recordId).get();
+    final data = recordSnap.data();
+    if (data == null) {
+      throw StateError('presence record $recordId not found');
+    }
+    if (data['isOpen'] != true) {
+      throw PresenceRecordClosedException(recordId: recordId);
+    }
+
+    // Answers must be written while the record is still open.
+    for (final draft in answers ?? const <DepartureAnswerDraft>[]) {
+      await _answers(recordId).add(
+        PresenceAnswer.toCreateMap(
+          question: draft.question,
+          value: draft.value,
+          recordedPhase: RecordedPhase.saida,
+          createdBy: updatedBy,
+          recordedAt: departedAt,
+        ),
+      );
+    }
+
     await _records.doc(recordId).update(
       PresenceRecord.toDepartureMap(
         departedAt: departedAt,
