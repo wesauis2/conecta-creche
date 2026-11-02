@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'app.dart';
 import 'auth/google_auth_service.dart';
 import 'classes/class_repository.dart';
+import 'fcm/fcm_messaging_service.dart';
+import 'fcm/fcm_token_repository.dart';
 import 'firebase/firebase_bootstrap.dart';
 import 'forms/form_question_repository.dart';
 import 'levels/level_repository.dart';
@@ -32,6 +34,8 @@ Future<void> main() async {
       );
       return;
     case FirebaseBootstrapState.initialized:
+      FcmMessagingService.bindBackgroundHandler();
+
       final authService = GoogleAuthService();
       final userRepository = UserRepository();
       final childRepository = ChildRepository();
@@ -42,6 +46,12 @@ Future<void> main() async {
       final muralRepository = MuralRepository();
       final notificationRepository = NotificationRepository();
       final muralReadsRepository = MuralReadsRepositoryImpl();
+      final fcmTokenRepository = FcmTokenRepository();
+      final fcmMessagingService = FcmMessagingService(
+        tokenRepository: fcmTokenRepository,
+      );
+      fcmMessagingService.attachToAuth(authService.authStateChanges);
+
       await authService.ensureGoogleSignInInitialized();
       runApp(
         ConectaCrecheApp(
