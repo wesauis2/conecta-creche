@@ -59,7 +59,7 @@ Associação n–n; responsável só acessa dados das crianças vinculadas. Edit
 _Avoid_: Conta familiar compartilhada sem uid
 
 **Mural**:
-Timeline por **efetividade** (`effectiveAt`; default copia `releasedAt`). Itens liberados após `releasedAt`; formatos compacto/expandido; feed pode misturar posts, notificações registradas, presenças/incidentes relevantes.
+Timeline por **efetividade** (`effectiveAt`; default copia `releasedAt`). Itens liberados após `releasedAt`; formatos compacto/expandido; feed pode misturar posts, notificações registradas, presenças/incidentes relevantes. Expandir detalhe registra leitura em `mural_reads` (`channel` mural|notification); gestão vê contagem simples de lidos.
 _Avoid_: Feed só por createdAt; pin manual na v1
 
 **Liberação / efetividade**:

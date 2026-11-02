@@ -14,6 +14,7 @@ Regras versionadas em [`firestore.rules`](../firestore.rules). Índices em [`fir
 | `form_questions/{id}` | **read/write** `signedIn()`; sem hard delete | read Cuidador+; write gestão+ |
 | `mural_posts/{id}` | **read/write** `signedIn()`; sem hard delete | read rank ≥ responsável + `releasedAt`; write gestão+ |
 | `notifications/{id}` | **read/write** `signedIn()`; sem hard delete | destinatário (+ broadcast); write gestão+ |
+| `mural_reads/{id}` | **read/write** `signedIn()`; sem hard delete | dono (próprio uid) create/update; gestão+ lista agregados |
 
 Hierarquia (rank): `admin` (4) > `gestao` (3) > `cuidador` (2) > `responsavel` (1) > `convidado` (0). Helpers `isCaregiverPlus()` / `isGestaoPlus()` / `isAdmin()` espelham `lib/users/user_role.dart`. Matriz comentada no topo de `firestore.rules`.
 
@@ -108,6 +109,7 @@ Use o playground (Firestore → Regras) ou a CLI.
 | Apagar pergunta | `form_questions` | `fq1` | `adm1` (admin) | delete | **Negado** |
 | Ler/criar mural (signed-in, leva) | `mural_posts` | `mp1` | `mgr1` | get / create | **Permitido** |
 | Ler/criar notification (leva) | `notifications` | `n1` | `mgr1` | get / create | **Permitido** |
+| Registrar leitura (leva) | `mural_reads` | `mr1` | `resp1` | create | **Permitido** |
 | Sem auth (formulário/mural) | `form_questions` / `mural_posts` | — | *(nenhum)* | get | **Negado** |
 
 Passos no playground:

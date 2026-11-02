@@ -74,6 +74,7 @@ service cloud.firestore {
     // | form_questions               | Cuidador+                          | gestão+                              |
     // | mural_posts                  | autenticados rank ≥ responsável; respeitar releasedAt | gestão+ |
     // | notifications                | destinatário (+ broadcast)         | gestão+                              |
+    // | mural_reads                  | dono; gestão+ lista                | dono (próprio uid)                   |
     // ---------------------------------------------------------------------------
 
     match /users/{userId} {
@@ -211,6 +212,14 @@ service cloud.firestore {
     // Leva: signed-in. Final: destinatário lê as próprias (+ broadcast
     // sem userId); write gestão+.
     match /notifications/{notificationId} {
+      allow get, list: if signedIn();
+      allow create, update: if signedIn();
+      allow delete: if false;
+    }
+
+    // `mural_reads` (docs/requisitos/mural-leitura.md — RF0016).
+    // Leva: signed-in. Final: create/update só do próprio uid; gestão+ lista.
+    match /mural_reads/{readId} {
       allow get, list: if signedIn();
       allow create, update: if signedIn();
       allow delete: if false;

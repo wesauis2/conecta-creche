@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../auth/google_auth_service.dart';
 import '../forms/form_question_repository.dart';
+import '../mural/mural_reads_repository.dart';
 import '../mural/mural_repository.dart';
 import '../mural/notification_repository.dart';
 import '../presence/child_repository.dart';
@@ -35,6 +36,7 @@ class HomeShell extends StatelessWidget {
     required this.formQuestionRepository,
     required this.muralRepository,
     required this.notificationRepository,
+    required this.muralReadsRepository,
   });
 
   final UserProfile profile;
@@ -45,6 +47,7 @@ class HomeShell extends StatelessWidget {
   final FormQuestionRepository formQuestionRepository;
   final MuralPostsRepository muralRepository;
   final NotificationsRepository notificationRepository;
+  final MuralReadsRepository muralReadsRepository;
 
   void _openProfile(BuildContext context) {
     Navigator.of(context).push(
@@ -119,6 +122,7 @@ class HomeShell extends StatelessWidget {
           authorUid: profile.uid,
           role: profile.role,
           notificationRepository: notificationRepository,
+          muralReadsRepository: muralReadsRepository,
           childRepository: childRepository,
           presenceRepository: presenceRepository,
           mostrarAppBar: true,

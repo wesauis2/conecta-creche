@@ -4,6 +4,7 @@ import 'app.dart';
 import 'auth/google_auth_service.dart';
 import 'firebase/firebase_bootstrap.dart';
 import 'forms/form_question_repository.dart';
+import 'mural/mural_reads_repository.dart';
 import 'mural/mural_repository.dart';
 import 'mural/notification_repository.dart';
 import 'presence/child_repository.dart';
@@ -36,6 +37,7 @@ Future<void> main() async {
       final formQuestionRepository = FormQuestionRepository();
       final muralRepository = MuralRepository();
       final notificationRepository = NotificationRepository();
+      final muralReadsRepository = MuralReadsRepositoryImpl();
       await authService.ensureGoogleSignInInitialized();
       runApp(
         ConectaCrecheApp(
@@ -46,6 +48,7 @@ Future<void> main() async {
           formQuestionRepository: formQuestionRepository,
           muralRepository: muralRepository,
           notificationRepository: notificationRepository,
+          muralReadsRepository: muralReadsRepository,
         ),
       );
   }
