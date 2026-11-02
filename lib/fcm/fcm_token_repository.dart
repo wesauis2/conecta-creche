@@ -18,7 +18,9 @@ abstract class FcmTokensRepository {
   /// Lista tokens do uid (útil em testes / limpeza).
   Future<List<FcmToken>> listForUid(String uid);
 
-  /// Todos os tokens (disparo broadcast de mural no lab / testes).
+  /// Todos os tokens — **só lab/Admin/FakeFirestore**. Cliente autenticado
+  /// não passa nas rules (`fcm_tokens` só o dono); broadcast FCM via
+  /// `sh/send-fcm-notification.sh`.
   Future<List<FcmToken>> listAll();
 }
 

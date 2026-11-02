@@ -178,13 +178,22 @@ class MuralRepository implements MuralPostsRepository {
 
   /// Feed com opção de incluir agendados (gestão+). Ordenação por
   /// `effectiveAt` desc.
+  ///
+  /// Sem [includeUnreleased], a query restringe `releasedAt <= asOf` para
+  /// casar com firestore.rules (list-all falha se existir pré-liberação).
   @override
   Stream<List<MuralPost>> watchPosts({
     bool includeUnreleased = false,
     DateTime? asOf,
   }) {
-    return _posts.snapshots().map((snapshot) {
-      final now = asOf ?? DateTime.now();
+    final now = asOf ?? DateTime.now();
+    final query = includeUnreleased
+        ? _posts
+        : _posts.where(
+            'releasedAt',
+            isLessThanOrEqualTo: Timestamp.fromDate(now),
+          );
+    return query.snapshots().map((snapshot) {
       final posts = snapshot.docs
           .map((doc) => MuralPost.fromFirestore(doc.id, doc.data()))
           .where((post) => includeUnreleased || post.isReleased(asOf: now))
@@ -196,6 +205,8 @@ class MuralRepository implements MuralPostsRepository {
 
   /// Página da timeline visível (scroll infinito). Ordenação estável por
   /// `effectiveAt` desc, desempate por id desc.
+  ///
+  /// Query com `releasedAt <= asOf` (não lista a coleção inteira).
   @override
   Future<List<MuralPost>> listVisiblePosts({
     DateTime? asOf,
@@ -204,7 +215,12 @@ class MuralRepository implements MuralPostsRepository {
     String? startAfterId,
   }) async {
     final now = asOf ?? DateTime.now();
-    final snapshot = await _posts.get();
+    final snapshot = await _posts
+        .where(
+          'releasedAt',
+          isLessThanOrEqualTo: Timestamp.fromDate(now),
+        )
+        .get();
     final posts = snapshot.docs
         .map((doc) => MuralPost.fromFirestore(doc.id, doc.data()))
         .where((post) => post.isReleased(asOf: now))

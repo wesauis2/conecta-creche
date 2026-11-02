@@ -119,8 +119,7 @@ void main() {
   });
 
   group('dispatchMuralPost', () {
-    test('broadcast + FCM when requiresNotification and effective now',
-        () async {
+    test('broadcast grava feed sem listAll de tokens (rules)', () async {
       await tokens.upsertToken(
         uid: 'u1',
         token: 't1',
@@ -143,12 +142,12 @@ void main() {
       );
 
       expect(result.notificationIds, hasLength(1));
-      expect(result.sendAttempts, 2);
-      expect(result.sendSuccesses, 2);
+      expect(result.sendAttempts, 0);
+      expect(result.sendSuccesses, 0);
 
       final data =
           (await firestore.collection('notifications').get()).docs.single.data();
-      expect(data.containsKey('userId'), isFalse);
+      expect(data['userId'], NotificationRepository.broadcastUserId);
       expect(data['sourceType'], 'mural_post');
       expect(data['sourceId'], 'post-1');
     });
@@ -255,7 +254,12 @@ void main() {
       expect(notifs.docs, hasLength(1));
       expect(notifs.docs.single.data()['sourceType'], 'mural_post');
       expect(notifs.docs.single.data()['sourceId'], id);
-      expect(sender.attempts, hasLength(1));
+      expect(
+        notifs.docs.single.data()['userId'],
+        NotificationRepository.broadcastUserId,
+      );
+      // Broadcast FCM exige Admin; cliente só grava o feed.
+      expect(sender.attempts, isEmpty);
     });
   });
 }

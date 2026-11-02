@@ -41,6 +41,18 @@ void main() {
     expect(data.containsKey('sent'), isFalse);
   });
 
+  test('broadcast persiste sentinel __broadcast__ para query alinhada às rules',
+      () async {
+    final id = await repository.createNotification(
+      title: 'Broadcast',
+      body: 'b',
+      emittedAt: DateTime.utc(2026, 11, 1),
+    );
+    final data =
+        (await firestore.collection('notifications').doc(id).get()).data()!;
+    expect(data['userId'], NotificationRepository.broadcastUserId);
+  });
+
   test('listForUser returns own + broadcast, ordered by effectiveAt desc',
       () async {
     await repository.createNotification(

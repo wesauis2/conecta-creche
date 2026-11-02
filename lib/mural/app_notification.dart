@@ -54,13 +54,19 @@ class AppNotification {
       DateTime.fromMillisecondsSinceEpoch(0);
 
   factory AppNotification.fromFirestore(String id, Map<String, dynamic> data) {
+    final rawUserId = data['userId'] as String?;
     return AppNotification(
       id: id,
       title: data['title'] as String? ?? '',
       body: data['body'] as String? ?? '',
       emittedAt: _readDate(data['emittedAt']),
       scheduledAt: _readDate(data['scheduledAt']),
-      userId: data['userId'] as String?,
+      // Sentinel de broadcast → null no domínio (ver NotificationRepository).
+      userId: (rawUserId == null ||
+              rawUserId.isEmpty ||
+              rawUserId == '__broadcast__')
+          ? null
+          : rawUserId,
       sourceType: data['sourceType'] == null
           ? null
           : NotificationSourceType.fromFirestore(data['sourceType'] as String?),

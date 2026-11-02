@@ -142,6 +142,10 @@ class NotificationDispatchService {
 
     try {
       if (recipientUids == null || recipientUids.isEmpty) {
+        // Feed broadcast (`userId: __broadcast__`). Fan-out FCM de todos os
+        // tokens exige Admin (rules: fcm_tokens só o dono); use
+        // sh/send-fcm-notification.sh no lab. Com recipientUids, push via
+        // listForUid (query alinhada às rules).
         final id = await _notifications.createNotification(
           title: title,
           body: body,
@@ -150,24 +154,6 @@ class NotificationDispatchService {
           sourceId: postId,
         );
         ids.add(id);
-
-        final tokens = await _tokens.listAll();
-        for (final token in tokens) {
-          attempts++;
-          final ok = await _sender.sendToToken(
-            token: token.token,
-            title: title,
-            body: body,
-            data: {
-              'sourceType': NotificationSourceType.muralPost.firestoreValue,
-              'sourceId': postId,
-              'notificationId': id,
-              'title': title,
-              'body': body,
-            },
-          );
-          if (ok) successes++;
-        }
       } else {
         final emitted = effectiveAt.isAfter(now) ? now : effectiveAt;
         for (final uid in recipientUids.toSet()) {

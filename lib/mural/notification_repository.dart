@@ -23,12 +23,19 @@ class NotificationRepository implements NotificationsRepository {
   NotificationRepository({FirebaseFirestore? firestore})
       : _firestore = firestore ?? FirebaseFirestore.instance;
 
+  /// Sentinel em `userId` para broadcast (queryável; `null` quebra no fake
+  /// e em list rules). Espelhado em firestore.rules `canReadNotification`.
+  static const broadcastUserId = '__broadcast__';
+
   final FirebaseFirestore _firestore;
 
   CollectionReference<Map<String, dynamic>> get _notifications =>
       _firestore.collection('notifications');
 
   /// Grava o registro. Não dispara push.
+  ///
+  /// Sem destinatário: persiste `userId: __broadcast__` (queryável e
+  /// legível por qualquer signed-in nas rules).
   @override
   Future<String> createNotification({
     required String title,
@@ -45,15 +52,13 @@ class NotificationRepository implements NotificationsRepository {
       'title': title,
       'body': body,
       'createdAt': FieldValue.serverTimestamp(),
+      'userId': (userId == null || userId.isEmpty) ? broadcastUserId : userId,
     };
     if (emitted != null) {
       payload['emittedAt'] = Timestamp.fromDate(emitted);
     }
     if (scheduledAt != null) {
       payload['scheduledAt'] = Timestamp.fromDate(scheduledAt);
-    }
-    if (userId != null) {
-      payload['userId'] = userId;
     }
     if (sourceType != null) {
       payload['sourceType'] = sourceType.firestoreValue;
@@ -66,26 +71,33 @@ class NotificationRepository implements NotificationsRepository {
     return docRef.id;
   }
 
-  /// Notificações do destinatário + broadcasts (`userId` ausente), ordenadas
-  /// por data análoga a `effectiveAt` (desc). Inclui só as já emitidas ou
-  /// com `scheduledAt <= asOf`.
+  /// Notificações do destinatário + broadcasts, ordenadas por data análoga a
+  /// `effectiveAt` (desc). Inclui só as já emitidas ou com
+  /// `scheduledAt <= asOf`.
+  ///
+  /// Duas queries (próprias + `__broadcast__`) — list-all falha nas rules se
+  /// existir doc de outro `userId`.
   @override
   Future<List<AppNotification>> listForUser(
     String uid, {
     DateTime? asOf,
   }) async {
     final now = asOf ?? DateTime.now();
-    final snapshot = await _notifications.get();
-    final items = snapshot.docs
-        .map((doc) => AppNotification.fromFirestore(doc.id, doc.data()))
-        .where((n) {
-          final forUser = n.userId == null || n.userId == uid;
-          if (!forUser) return false;
-          if (n.emittedAt != null) return !n.emittedAt!.isAfter(now);
-          if (n.scheduledAt != null) return !n.scheduledAt!.isAfter(now);
-          return false;
-        })
-        .toList();
+    final own = await _notifications.where('userId', isEqualTo: uid).get();
+    final broadcast = await _notifications
+        .where('userId', isEqualTo: broadcastUserId)
+        .get();
+
+    final byId = <String, AppNotification>{};
+    for (final doc in [...own.docs, ...broadcast.docs]) {
+      byId[doc.id] = AppNotification.fromFirestore(doc.id, doc.data());
+    }
+
+    final items = byId.values.where((n) {
+      if (n.emittedAt != null) return !n.emittedAt!.isAfter(now);
+      if (n.scheduledAt != null) return !n.scheduledAt!.isAfter(now);
+      return false;
+    }).toList();
     items.sort((a, b) {
       final byDate = b.effectiveAt.compareTo(a.effectiveAt);
       if (byDate != 0) return byDate;

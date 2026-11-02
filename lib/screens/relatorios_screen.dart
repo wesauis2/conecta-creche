@@ -79,13 +79,15 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
         return;
       }
 
-      final linkedIds = children.map((c) => c.id).toSet();
+      // Por criança vinculada (não listByDayKey): rules só permitem ao
+      // responsável ler presença das crianças em responsibleUids.
+      final dayKeys = _period.dayKeys.toSet();
       final periodRecords = <PresenceRecord>[];
-      for (final dayKey in _period.dayKeys) {
-        final dayRecords =
-            await widget.presenceRepository.listByDayKey(dayKey: dayKey);
-        for (final record in dayRecords) {
-          if (linkedIds.contains(record.childId)) {
+      for (final child in children) {
+        final childRecords =
+            await widget.presenceRepository.listByChildId(childId: child.id);
+        for (final record in childRecords) {
+          if (dayKeys.contains(record.dayKey)) {
             periodRecords.add(record);
           }
         }

@@ -107,6 +107,7 @@ service cloud.firestore {
         && (
           !('userId' in resource.data.keys())
           || resource.data.userId == null
+          || resource.data.userId == '__broadcast__'
           || resource.data.userId == request.auth.uid
         );
     }
@@ -124,7 +125,7 @@ service cloud.firestore {
     // | presence_records/*/answers   | mesmos leitores do registro        | create/update Cuidador+ (janela 24h no app) |
     // | form_questions               | Cuidador+                          | gestão+                              |
     // | mural_posts                  | rank ≥ responsável + releasedAt; gestão+ vê pré-liberação | gestão+ |
-    // | notifications                | destinatário (+ broadcast)         | gestão+; Cuidador+ create se sourceType=incident |
+    // | notifications                | destinatário (+ userId=__broadcast__) | gestão+; Cuidador+ create se sourceType=incident |
     // | fcm_tokens                   | dono                               | dono                                 |
     // | levels / classes / classrooms| Cuidador+                          | gestão+                              |
     // | mural_reads                  | dono; gestão+ lista                | dono (próprio uid)                   |

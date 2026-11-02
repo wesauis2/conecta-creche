@@ -13,7 +13,7 @@ Regras versionadas em [`firestore.rules`](../firestore.rules). Índices em [`fir
 | `presence_records/{id}/answers/{id}` | mesmos leitores do registro | create/update Cuidador+ (janela 24h no app) |
 | `form_questions/{id}` | Cuidador+ | gestão+ |
 | `mural_posts/{id}` | rank ≥ responsável + `releasedAt` (gestão+ vê pré-liberação) | gestão+ |
-| `notifications/{id}` | destinatário (`userId`) ou broadcast (`userId` ausente/null) | gestão+; Cuidador+ **create** se `sourceType == incident` |
+| `notifications/{id}` | destinatário (`userId`) ou broadcast (`userId == __broadcast__`, legado null/ausente) | gestão+; Cuidador+ **create** se `sourceType == incident` |
 | `fcm_tokens/{id}` | dono (`uid`) | dono |
 | `levels` / `classes` / `classrooms` | Cuidador+ | gestão+ |
 | `mural_reads/{id}` | dono; gestão+ lista | dono (próprio `uid`) |
@@ -24,7 +24,7 @@ Hierarquia (rank): `admin` (4) > `gestao` (3) > `cuidador` (2) > `responsavel` (
 
 **Vínculos:** campo `children.responsibleUids` (array). Query do responsável: `array-contains` (índice single-field automático). Sem coleção `child_responsibles` na v1.
 
-**Queries após endurecer:** listagens do cliente devem restringir o conjunto ao que o papel pode ler (ex.: responsável → `children` com `array-contains`; presença por `childId` vinculado; mural com `releasedAt <= now` se não for gestão+; notifications só do `userId` + broadcasts). Queries “pega tudo e filtra no client” falham se existir doc ilegível no resultado.
+**Queries após endurecer:** listagens do cliente restringem o conjunto ao que o papel pode ler — responsável: `children` `array-contains`; presença por `childId`; mural `releasedAt <= now` (gestão+ lista tudo); notifications `userId == uid` + `userId == __broadcast__`. Queries “pega tudo e filtra no client” falham se existir doc ilegível no resultado. Fan-out FCM broadcast: Admin / `sh/send-fcm-notification.sh` (cliente não lista `fcm_tokens` alheios).
 
 ## Checklist — publish manual
 
@@ -34,7 +34,7 @@ Hierarquia (rank): `admin` (4) > `gestao` (3) > `cuidador` (2) > `responsavel` (
    - [ ] `git status` limpo no commit que contém `firestore.rules` / `firestore.indexes.json`
    - [ ] Diff revisado: matriz final (vínculos, presença, forms, mural, notifications, placeholders)
    - [ ] `flutter test` passou no branch
-   - [ ] App/queries alinhados às rules (responsável não lista `presence_records`/`mural_posts`/`notifications` sem filtro)
+   - [x] App/queries alinhados às rules (responsável: `children` array-contains; presença por `childId`; mural `releasedAt <= now`; notifications `userId` + `__broadcast__`)
 
 2. **CLI / projeto**
    - [ ] Firebase CLI instalada e logada: `firebase login`
@@ -129,7 +129,7 @@ Use o playground (Firestore → Regras) ou a CLI.
 | Criar mural (cuidador) | `mural_posts` | `mp1` | `cui1` | create | **Negado** |
 | Ler notification própria | `notifications` | `n1` (`userId`=`resp1`) | `resp1` | get | **Permitido** |
 | Ler notification alheia | `notifications` | `n2` (`userId`=`outro`) | `resp1` | get | **Negado** |
-| Ler broadcast | `notifications` | `n3` (sem `userId`) | `resp1` | get | **Permitido** |
+| Ler broadcast | `notifications` | `n3` (`userId=__broadcast__`) | `resp1` | get | **Permitido** |
 | Criar notification (gestão) | `notifications` | `n1` | `mgr1` | create | **Permitido** |
 | Criar notification de incidente (cuidador) | `notifications` | `n1` (`sourceType=incident`) | `cui1` | create | **Permitido** |
 | Criar notification genérica (cuidador) | `notifications` | `n1` (sem incidente) | `cui1` | create | **Negado** |
