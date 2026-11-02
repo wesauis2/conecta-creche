@@ -36,6 +36,10 @@ enum UserRole {
   /// "Formulário configurável" and docs/requisitos/formularios-configuraveis.md.
   bool get canConfigureForms => rank >= UserRole.gestao.rank;
 
+  /// Gestão+ cadastra níveis e turmas e vincula crianças. Ver CONTEXT.md
+  /// "Nível" / "Turma" e docs/requisitos/niveis-turmas.md.
+  bool get canManageLevelsAndClasses => rank >= UserRole.gestao.rank;
+
   /// Gestão+ cria/edita publicações oficiais do mural. Ver CONTEXT.md "Mural"
   /// e docs/requisitos/mural.md.
   bool get canPublishMural => rank >= UserRole.gestao.rank;

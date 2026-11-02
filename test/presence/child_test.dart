@@ -30,10 +30,23 @@ void main() {
 
       expect(child.active, isTrue);
       expect(child.responsibleUids, isEmpty);
+      expect(child.levelId, isNull);
+      expect(child.classId, isNull);
       expect(child.createdAt, isNull);
       expect(child.updatedAt, isNull);
       expect(child.createdBy, isNull);
       expect(child.updatedBy, isNull);
+    });
+
+    test('maps optional levelId and classId', () {
+      final child = Child.fromFirestore('child-4', {
+        'name': 'Duda',
+        'levelId': 'lvl-1',
+        'classId': 'cls-1',
+      });
+
+      expect(child.levelId, 'lvl-1');
+      expect(child.classId, 'cls-1');
     });
 
     test('maps active: false for inactivated children', () {

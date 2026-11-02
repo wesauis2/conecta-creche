@@ -70,6 +70,67 @@ void main() {
       expect(data['name'], 'Beto');
       expect(data['active'], isFalse);
     });
+
+    test('sets optional levelId/classId and syncs classes.childIds', () async {
+      final childId = await repository.createChild(
+        name: 'Ana',
+        createdBy: 'uid-1',
+      );
+      await firestore.collection('classes').doc('cls-1').set({
+        'year': 2026,
+        'levelIds': <String>[],
+        'childIds': <String>[],
+        'caregiverUids': <String>[],
+        'active': true,
+      });
+
+      await repository.updateChild(
+        childId: childId,
+        levelId: 'lvl-1',
+        classId: 'cls-1',
+        updatedBy: 'uid-gestao',
+      );
+
+      final childDoc = await firestore.collection('children').doc(childId).get();
+      expect(childDoc.data()!['levelId'], 'lvl-1');
+      expect(childDoc.data()!['classId'], 'cls-1');
+
+      final classDoc = await firestore.collection('classes').doc('cls-1').get();
+      expect(classDoc.data()!['childIds'], [childId]);
+    });
+
+    test('clears levelId/classId without requiring them for presence catalog',
+        () async {
+      final childId = await repository.createChild(
+        name: 'Beto',
+        createdBy: 'uid-1',
+      );
+      await firestore.collection('classes').doc('cls-1').set({
+        'year': 2026,
+        'childIds': <String>[childId],
+        'active': true,
+      });
+      await firestore.collection('children').doc(childId).update({
+        'levelId': 'lvl-1',
+        'classId': 'cls-1',
+      });
+
+      await repository.updateChild(
+        childId: childId,
+        clearLevelId: true,
+        clearClassId: true,
+        updatedBy: 'uid-gestao',
+      );
+
+      final childDoc = await firestore.collection('children').doc(childId).get();
+      expect(childDoc.data()!['levelId'], isNull);
+      expect(childDoc.data()!['classId'], isNull);
+
+      final active = await repository.listActiveChildren();
+      expect(active.single.id, childId);
+      expect(active.single.levelId, isNull);
+      expect(active.single.classId, isNull);
+    });
   });
 
   group('listActiveChildren', () {

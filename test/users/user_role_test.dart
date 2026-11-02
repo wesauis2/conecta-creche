@@ -41,6 +41,19 @@ void main() {
     });
   });
 
+  group('UserRole.canManageLevelsAndClasses', () {
+    test('is true for gestao and admin', () {
+      expect(UserRole.gestao.canManageLevelsAndClasses, isTrue);
+      expect(UserRole.admin.canManageLevelsAndClasses, isTrue);
+    });
+
+    test('is false below gestao', () {
+      expect(UserRole.cuidador.canManageLevelsAndClasses, isFalse);
+      expect(UserRole.responsavel.canManageLevelsAndClasses, isFalse);
+      expect(UserRole.convidado.canManageLevelsAndClasses, isFalse);
+    });
+  });
+
   group('UserRole.canPublishMural', () {
     test('is true for gestao and admin', () {
       expect(UserRole.gestao.canPublishMural, isTrue);
