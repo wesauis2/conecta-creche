@@ -31,6 +31,7 @@ class _MuralPostFormScreenState extends State<MuralPostFormScreen> {
   late DateTime _releasedAt;
   late DateTime _effectiveAt;
   bool _sameEffective = true;
+  bool _requiresNotification = false;
   bool _salvando = false;
 
   @override
@@ -48,6 +49,7 @@ class _MuralPostFormScreenState extends State<MuralPostFormScreen> {
     _effectiveAt = existing?.effectiveAt ?? _releasedAt;
     _sameEffective = existing == null ||
         existing.effectiveAt.isAtSameMomentAs(existing.releasedAt);
+    _requiresNotification = existing?.requiresNotification ?? false;
   }
 
   @override
@@ -115,6 +117,7 @@ class _MuralPostFormScreenState extends State<MuralPostFormScreen> {
           createdBy: widget.authorUid,
           releasedAt: _releasedAt,
           effectiveAt: effective,
+          requiresNotification: _requiresNotification,
           location: location.isEmpty ? null : location,
           scheduleText: schedule.isEmpty ? null : schedule,
         );
@@ -127,6 +130,7 @@ class _MuralPostFormScreenState extends State<MuralPostFormScreen> {
           kind: _kind,
           releasedAt: _releasedAt,
           effectiveAt: effective,
+          requiresNotification: _requiresNotification,
           location: location.isEmpty ? null : location,
           scheduleText: schedule.isEmpty ? null : schedule,
           clearLocation: location.isEmpty && existing.location != null,
@@ -250,6 +254,16 @@ class _MuralPostFormScreenState extends State<MuralPostFormScreen> {
                   child: const Text('Alterar'),
                 ),
               ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.notifications_active_outlined),
+              title: const Text('Requer notificação'),
+              subtitle: const Text(
+                'Se a efetividade já chegou, registra aviso e tenta push.',
+              ),
+              value: _requiresNotification,
+              onChanged: (v) => setState(() => _requiresNotification = v),
+            ),
             const SizedBox(height: 24),
             FilledButton(
               onPressed: _salvando ? null : _salvar,

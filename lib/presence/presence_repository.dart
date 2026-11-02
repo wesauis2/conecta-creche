@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
+import '../fcm/notification_dispatch_service.dart';
 import '../forms/form_question.dart';
 import 'parecer.dart';
 import 'presence_answer.dart';
@@ -15,10 +17,14 @@ import 'presence_record.dart';
 /// stays free of timezone concerns; it only enforces the open-guard and
 /// shapes the Firestore writes/reads.
 class PresenceRepository {
-  PresenceRepository({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+  PresenceRepository({
+    FirebaseFirestore? firestore,
+    NotificationDispatchService? notificationDispatch,
+  })  : _firestore = firestore ?? FirebaseFirestore.instance,
+        _notificationDispatch = notificationDispatch;
 
   final FirebaseFirestore _firestore;
+  final NotificationDispatchService? _notificationDispatch;
 
   CollectionReference<Map<String, dynamic>> get _records =>
       _firestore.collection('presence_records');
@@ -89,9 +95,11 @@ class PresenceRepository {
       throw PresenceRecordClosedException(recordId: recordId);
     }
 
+    final childId = data['childId'] as String? ?? '';
+
     // Answers must be written while the record is still open.
     for (final draft in answers ?? const <DepartureAnswerDraft>[]) {
-      await _answers(recordId).add(
+      final docRef = await _answers(recordId).add(
         PresenceAnswer.toCreateMap(
           question: draft.question,
           value: draft.value,
@@ -100,6 +108,15 @@ class PresenceRepository {
           recordedAt: departedAt,
         ),
       );
+      if (draft.question.flags.incident) {
+        await _dispatchIncidentQuietly(
+          childId: childId,
+          answerId: docRef.id,
+          question: draft.question,
+          value: draft.value,
+          recordedAt: departedAt,
+        );
+      }
     }
 
     await _records.doc(recordId).update(
@@ -266,7 +283,55 @@ class PresenceRepository {
         recordedAt: instant,
       ),
     );
+
+    if (question.flags.incident) {
+      await _dispatchIncidentQuietly(
+        childId: data['childId'] as String? ?? '',
+        answerId: docRef.id,
+        question: question,
+        value: value,
+        recordedAt: instant,
+      );
+    }
+
     return docRef.id;
+  }
+
+  Future<void> _dispatchIncidentQuietly({
+    required String childId,
+    required String answerId,
+    required FormQuestion question,
+    required Object? value,
+    required DateTime recordedAt,
+  }) async {
+    final dispatch = _notificationDispatch;
+    if (dispatch == null || childId.isEmpty) return;
+
+    final snapshot = QuestionSnapshot.fromQuestion(question);
+    final answer = PresenceAnswer(
+      id: answerId,
+      questionSnapshot: snapshot,
+      value: value,
+      flagsSnapshot: question.flags,
+      recordedPhase: RecordedPhase.duranteDia,
+      recordedAt: recordedAt,
+    );
+    final title = 'Incidente · ${question.prompt}';
+    final body = answer.displayValue.isEmpty
+        ? 'Registro de incidente na creche.'
+        : answer.displayValue;
+
+    try {
+      await dispatch.dispatchIncident(
+        childId: childId,
+        sourceId: answerId,
+        title: title,
+        body: body,
+        emittedAt: recordedAt.toUtc(),
+      );
+    } on Object catch (error) {
+      debugPrint('Presença: disparo de incidente falhou: $error');
+    }
   }
 
   /// Edita o `value` de uma answer dentro da janela de 24h (`createdAt`).

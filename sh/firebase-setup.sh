@@ -355,8 +355,9 @@ note "• Anexos desta leva ficam no Firestore (bytes/base64 no documento), não
 note "• Não faça upgrade para Blaze só por causa de push."
 printf '\n'
 say "Envio server-side no lab (opcional, sem deploy automático):"
-note "• Caminho mínimo: Admin SDK num script local com service account (console → Contas de serviço)."
-note "• Cloud Functions / Callable: opcional e tipicamente Blaze — só se o lab precisar; documentar depois."
+note "• Caminho mínimo: ./sh/send-fcm-notification.sh (dart run tool/send_fcm_notification.dart) com ADC/service account."
+note "• Sem credencial: o script só grava o doc em notifications/ (feed) e omite o push."
+note "• Cloud Functions / Callable: opcional e tipicamente Blaze — só se o lab precisar."
 note "• Preferir o caminho que não force Blaze; sem FCM configurado o app só usa o feed notifications/."
 pause "Notas de canal e Spark vs Blaze lidas?"
 

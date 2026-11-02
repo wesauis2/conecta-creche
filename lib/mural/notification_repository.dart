@@ -2,8 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'app_notification.dart';
 
-/// Persistência de `notifications` (registro local; sem envio FCM).
-/// Ver docs/requisitos/mural.md.
+/// Persistência de `notifications` (feed). Envio FCM: ver
+/// `lib/fcm/notification_dispatch_service.dart` e
+/// docs/requisitos/notificacoes-push.md.
 abstract class NotificationsRepository {
   Future<String> createNotification({
     required String title,
