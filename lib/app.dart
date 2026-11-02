@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'auth/google_auth_service.dart';
 import 'auth/user_sync_gate.dart';
+import 'forms/form_question_repository.dart';
 import 'presence/child_repository.dart';
 import 'presence/presence_repository.dart';
 import 'screens/bootstrap_error_screen.dart';
@@ -18,14 +19,18 @@ class ConectaCrecheApp extends StatelessWidget {
     required this.userRepository,
     ChildRepository? childRepository,
     PresenceRepository? presenceRepository,
+    FormQuestionRepository? formQuestionRepository,
     this.bootstrapError,
   })  : childRepository = childRepository ?? ChildRepository(),
-        presenceRepository = presenceRepository ?? PresenceRepository();
+        presenceRepository = presenceRepository ?? PresenceRepository(),
+        formQuestionRepository =
+            formQuestionRepository ?? FormQuestionRepository();
 
   final GoogleAuthService authService;
   final UserRepository userRepository;
   final ChildRepository childRepository;
   final PresenceRepository presenceRepository;
+  final FormQuestionRepository formQuestionRepository;
   final Object? bootstrapError;
 
   @override
@@ -54,6 +59,7 @@ class ConectaCrecheApp extends StatelessWidget {
               userRepository: userRepository,
               childRepository: childRepository,
               presenceRepository: presenceRepository,
+              formQuestionRepository: formQuestionRepository,
             ),
           );
         },

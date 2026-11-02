@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../auth/google_auth_service.dart';
+import '../forms/form_question_repository.dart';
 import '../presence/child_repository.dart';
 import '../presence/presence_repository.dart';
 import '../users/user_profile.dart';
@@ -17,6 +18,7 @@ class SignedInScreen extends StatelessWidget {
     required this.userRepository,
     required this.childRepository,
     required this.presenceRepository,
+    required this.formQuestionRepository,
   });
 
   final User user;
@@ -24,6 +26,7 @@ class SignedInScreen extends StatelessWidget {
   final UserRepository userRepository;
   final ChildRepository childRepository;
   final PresenceRepository presenceRepository;
+  final FormQuestionRepository formQuestionRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -61,6 +64,7 @@ class SignedInScreen extends StatelessWidget {
           userRepository: userRepository,
           childRepository: childRepository,
           presenceRepository: presenceRepository,
+          formQuestionRepository: formQuestionRepository,
         );
       },
     );

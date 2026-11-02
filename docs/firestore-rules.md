@@ -1,4 +1,4 @@
-# Regras Firestore — `users`, `user_roles`, `children` e `presence_records`
+# Regras Firestore — `users`, `user_roles`, `children`, `presence_records` e `form_questions`
 
 Regras versionadas em [`firestore.rules`](../firestore.rules).
 
@@ -6,8 +6,9 @@ Regras versionadas em [`firestore.rules`](../firestore.rules).
 - **`user_roles/{uid}`** — papel do usuário (`convidado`, `gestao`, etc.). Leitura pelo dono ou por gestão/admin; criação única no primeiro login apenas com `role: convidado`; **update** por gestão/admin com hierarquia (papel alvo atual e novo papel ≤ ao do caller; sem alterar o próprio documento).
 - **`children/{id}`** — catálogo (CONTEXT.md "Criança"). Cuidador+ lê/lista, cria e renomeia; só gestão+ altera `active` (inativação); sem hard delete.
 - **`presence_records/{id}`** — registros de presença (CONTEXT.md "Registro de presença"). Cuidador+ lê/lista, cria chegada e fecha com parecer (e edita o parecer depois); `childId`/`dayKey`/`arrivedAt` e um `departedAt` já definido são imutáveis fora do admin; só admin altera `arrivedAt`/`departedAt` já definidos ou apaga (hard delete).
+- **`form_questions/{id}`** — template de perguntas (CONTEXT.md "Formulário configurável"). Intenção: leitura Cuidador+, escrita gestão+; **durante a leva** as rules ficam permissivas (`signedIn()` create/update, sem hard delete) para não bloquear desenvolvimento.
 
-Hierarquia (rank): `admin` (4) > `gestao` (3) > `cuidador` (2) > `responsavel` (1) > `convidado` (0). Helpers `isCaregiverPlus()` (rank ≥ 2), `isGestaoPlus()` (rank ≥ 3, usado por `isManager()`) e `isAdmin()` (rank == 4) espelham `canOperatePresence`/`canInactivateChild`/`canAdminPresence` em `lib/users/user_role.dart`.
+Hierarquia (rank): `admin` (4) > `gestao` (3) > `cuidador` (2) > `responsavel` (1) > `convidado` (0). Helpers `isCaregiverPlus()` (rank ≥ 2), `isGestaoPlus()` (rank ≥ 3, usado por `isManager()`) e `isAdmin()` (rank == 4) espelham `canOperatePresence`/`canInactivateChild`/`canConfigureForms`/`canAdminPresence` em `lib/users/user_role.dart`.
 
 ## Deploy
 
@@ -67,6 +68,10 @@ Use o simulador do console (Firestore → Regras → **Playground**) ou a CLI.
 | Apagar registro (admin) | `presence_records` | `pr1` | `adm1` (admin) | delete | **Permitido** |
 | Apagar registro (gestão) | `presence_records` | `pr1` | `mgr1` (gestao) | delete | **Negado** |
 | Ler presença (convidado) | `presence_records` | — | `guest1` (convidado) | get / list | **Negado** |
+| Ler formulário (signed-in, leva) | `form_questions` | — | `cui1` (cuidador) | get / list | **Permitido** (permissivo na leva) |
+| Criar pergunta (signed-in, leva) | `form_questions` | `fq1` | `mgr1` (gestao) | create | **Permitido** (permissivo na leva) |
+| Apagar pergunta | `form_questions` | `fq1` | `adm1` (admin) | delete | **Negado** (sem hard delete) |
+| Sem auth (formulário) | `form_questions` | `fq1` | *(nenhum)* | get | **Negado** |
 
 Passos no playground (básico):
 

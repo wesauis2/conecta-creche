@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../auth/google_auth_service.dart';
+import '../forms/form_question_repository.dart';
 import '../presence/child_repository.dart';
 import '../presence/presence_repository.dart';
 import '../shell/shell_tabs.dart';
@@ -8,6 +9,7 @@ import '../users/user_profile.dart';
 import '../users/user_repository.dart';
 import '../users/user_role.dart';
 import 'children_screen.dart';
+import 'form_questions_screen.dart';
 import 'module_placeholder_screen.dart';
 import 'mural_screen.dart';
 import 'presence_home_body.dart';
@@ -27,6 +29,7 @@ class HomeShell extends StatelessWidget {
     required this.userRepository,
     required this.childRepository,
     required this.presenceRepository,
+    required this.formQuestionRepository,
   });
 
   final UserProfile profile;
@@ -34,6 +37,7 @@ class HomeShell extends StatelessWidget {
   final UserRepository userRepository;
   final ChildRepository childRepository;
   final PresenceRepository presenceRepository;
+  final FormQuestionRepository formQuestionRepository;
 
   void _openProfile(BuildContext context) {
     Navigator.of(context).push(
@@ -74,10 +78,9 @@ class HomeShell extends StatelessWidget {
   void _openForms(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (context) => const ModulePlaceholderScreen(
-          title: 'Formulários',
-          message:
-              'Em breve você poderá configurar as perguntas da rotina por aqui.',
+        builder: (context) => FormQuestionsScreen(
+          profile: profile,
+          formQuestionRepository: formQuestionRepository,
         ),
       ),
     );
@@ -138,7 +141,7 @@ class HomeShell extends StatelessWidget {
             onOpenChildren: profile.role.canOperatePresence
                 ? () => _openChildren(context)
                 : null,
-            onOpenForms: profile.role.canInactivateChild
+            onOpenForms: profile.role.canConfigureForms
                 ? () => _openForms(context)
                 : null,
             onOpenProfile: () => _openProfile(context),

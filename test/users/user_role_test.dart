@@ -28,6 +28,19 @@ void main() {
     });
   });
 
+  group('UserRole.canConfigureForms', () {
+    test('is true for gestao and admin', () {
+      expect(UserRole.gestao.canConfigureForms, isTrue);
+      expect(UserRole.admin.canConfigureForms, isTrue);
+    });
+
+    test('is false below gestao', () {
+      expect(UserRole.cuidador.canConfigureForms, isFalse);
+      expect(UserRole.responsavel.canConfigureForms, isFalse);
+      expect(UserRole.convidado.canConfigureForms, isFalse);
+    });
+  });
+
   group('UserRole.canAdminPresence', () {
     test('is true only for admin', () {
       expect(UserRole.admin.canAdminPresence, isTrue);
