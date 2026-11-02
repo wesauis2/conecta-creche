@@ -26,6 +26,15 @@
         { "fieldPath": "dayKey", "order": "ASCENDING" },
         { "fieldPath": "isOpen", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "presence_records",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "childId", "order": "ASCENDING" },
+        { "fieldPath": "dayKey", "order": "ASCENDING" },
+        { "fieldPath": "arrivedAt", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
