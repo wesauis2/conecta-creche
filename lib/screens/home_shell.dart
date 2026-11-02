@@ -3,23 +3,22 @@ import 'package:flutter/material.dart';
 import '../auth/google_auth_service.dart';
 import '../presence/child_repository.dart';
 import '../presence/presence_repository.dart';
+import '../shell/shell_tabs.dart';
 import '../users/user_profile.dart';
 import '../users/user_repository.dart';
 import '../users/user_role.dart';
+import 'children_screen.dart';
+import 'module_placeholder_screen.dart';
 import 'mural_screen.dart';
 import 'presence_home_body.dart';
+import 'role_shell_view.dart';
+import 'user_menu_body.dart';
 import 'user_profile_screen.dart';
 import 'users_screen.dart';
 
-/// Thin post-login shell: owns the auth-dependent app bar shortcuts (perfil/
-/// usuários) and hands role-based routing off to [PresenceHomeBody], which
-/// only needs [profile] and the presence repos. Kept thin on purpose so the
-/// routing logic stays testable without `GoogleAuthService`/
-/// `UserRepository`. See ticket 07.
-///
-/// Temporary exception: [UserRole.responsavel] lands on [MuralScreen] as home
-/// (from the mural/responsáveis tip). Equipe roles stay on presence; refactor
-/// later to unify entry points.
+/// Post-login shell: bottom tabs by role (default = profile focus) and a
+/// Menu tab with account + sitemap. Presença keeps [PresenceHomeBody];
+/// empty modules use placeholders until their features land.
 class HomeShell extends StatelessWidget {
   const HomeShell({
     super.key,
@@ -59,49 +58,106 @@ class HomeShell extends StatelessWidget {
     );
   }
 
-  List<Widget> _appBarActions(BuildContext context) {
-    return [
-      if (profile.canManageUsers)
-        IconButton(
-          onPressed: () => _openUsers(context),
-          tooltip: 'Usuários',
-          icon: const Icon(Icons.group_outlined),
+  void _openChildren(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => ChildrenScreen(
+          profile: profile,
+          childRepository: childRepository,
         ),
-      IconButton(
-        onPressed: () => _openProfile(context),
-        tooltip: 'Meu perfil',
-        icon: const Icon(Icons.person_outline),
       ),
-    ];
+    );
+  }
+
+  void _openForms(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => const ModulePlaceholderScreen(
+          title: 'Formulários',
+          message:
+              'Em breve você poderá configurar as perguntas da rotina por aqui.',
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModule(
+    BuildContext context,
+    ShellModule module,
+    void Function(ShellModule) selectModule,
+  ) {
+    switch (module) {
+      case ShellModule.presenca:
+        return PresenceHomeBody(
+          profile: profile,
+          childRepository: childRepository,
+          presenceRepository: presenceRepository,
+        );
+      case ShellModule.mural:
+        final greetingName = profile.displayName?.trim();
+        final greeting = profile.role == UserRole.responsavel
+            ? (greetingName != null && greetingName.isNotEmpty
+                ? 'Olá, $greetingName!'
+                : 'Bem-vindo ao Conecta Creche')
+            : null;
+        return MuralScreen(
+          mostrarAppBar: true,
+          saudacao: greeting,
+          podePublicar: profile.role.canInactivateChild,
+          autorNome: greetingName != null && greetingName.isNotEmpty
+              ? greetingName
+              : 'Equipe da creche',
+          autorCargo: profile.role.label,
+        );
+      case ShellModule.incidentes:
+        return const ModulePlaceholderScreen(
+          title: 'Incidentes',
+          message:
+              'Em breve a visão global de incidentes da gestão estará aqui.',
+        );
+      case ShellModule.relatorios:
+        return const ModulePlaceholderScreen(
+          title: 'Relatórios',
+          message:
+              'Em breve você poderá acompanhar a rotina das crianças vinculadas.',
+        );
+      case ShellModule.menu:
+        final tabs = shellTabsFor(profile.role);
+        return Scaffold(
+          appBar: AppBar(title: const Text('Menu')),
+          body: UserMenuBody(
+            profile: profile,
+            moduleTabs:
+                tabs.where((t) => t.module != ShellModule.menu).toList(),
+            onSelectModule: selectModule,
+            onOpenUsers:
+                profile.canManageUsers ? () => _openUsers(context) : null,
+            onOpenChildren: profile.role.canOperatePresence
+                ? () => _openChildren(context)
+                : null,
+            onOpenForms: profile.role.canInactivateChild
+                ? () => _openForms(context)
+                : null,
+            onOpenProfile: () => _openProfile(context),
+            onSignOut: authService.signOut,
+          ),
+        );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final actions = _appBarActions(context);
-
-    // Responsáveis open the app on the mural; do not alter equipe presence homes.
-    if (profile.role == UserRole.responsavel) {
-      final greetingName = profile.displayName?.trim();
-      final greeting = greetingName != null && greetingName.isNotEmpty
-          ? 'Olá, $greetingName!'
-          : 'Bem-vindo ao Conecta Creche';
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Conecta Creche'),
-          actions: actions,
-        ),
-        body: MuralScreen(
-          mostrarAppBar: false,
-          saudacao: greeting,
-        ),
+    final tabs = shellTabsFor(profile.role);
+    if (tabs.isEmpty) {
+      return const Scaffold(
+        body: Center(child: Text('Sem acesso operacional.')),
       );
     }
 
-    return PresenceHomeBody(
-      profile: profile,
-      childRepository: childRepository,
-      presenceRepository: presenceRepository,
-      appBarActions: actions,
+    return RoleShellView(
+      tabs: tabs,
+      initialIndex: defaultShellTabIndex(profile.role),
+      buildBody: _buildModule,
     );
   }
 }

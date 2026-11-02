@@ -9,15 +9,12 @@ import 'presence_gestao_screen.dart';
 /// Routes to the right presença home surface for `profile.role`: gestão/
 /// admin land on the aggregate view, cuidador lands on the day view, and
 /// other roles (responsável/convidado) get a placeholder — they never reach
-/// the presence surfaces. See CONTEXT.md "Visão do cuidador" / "Visão da
-/// gestão" and SPEC.md "Home: cuidador → detalhe do dia; gestão/admin →
-/// agregado."
+/// the presence tab. See CONTEXT.md "Visão do cuidador" / "Visão da gestão".
 ///
 /// Depends only on [profile] and the presence repos (no
 /// `GoogleAuthService`/`UserRepository`), so it can be widget-tested
-/// directly without touching Firebase Auth. [appBarActions] lets the caller
-/// (`HomeShell`) inject auth-dependent shortcuts (perfil/usuários) into
-/// whichever screen ends up owning the app's only app bar.
+/// directly without touching Firebase Auth. [appBarActions] lets the shell
+/// inject extra app-bar actions when needed (perfil/usuários live in Menu).
 class PresenceHomeBody extends StatelessWidget {
   const PresenceHomeBody({
     super.key,
