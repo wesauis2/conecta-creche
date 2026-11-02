@@ -1,158 +1,318 @@
 import 'package:flutter/material.dart';
 
-import '../mural/foto_placeholder.dart';
+import '../mural/mural_post.dart';
 import '../mural/mural_repository.dart';
-import '../mural/post_mural.dart';
 import 'mural_post_form_screen.dart';
 
-/// Mural da creche: feed com avisos, lembretes e fotos.
-/// Responsáveis só leem; equipe (`podePublicar`) também publica.
+/// Timeline do mural ordenada por efetividade. Gestão+ publica/edita;
+/// demais papéis só leem itens já liberados.
 class MuralScreen extends StatefulWidget {
   const MuralScreen({
     super.key,
+    required this.repository,
+    required this.authorUid,
     this.podePublicar = false,
     this.mostrarAppBar = true,
     this.saudacao,
-    this.autorNome = 'Equipe da creche',
-    this.autorCargo = 'Equipe',
   });
 
+  final MuralPostsRepository repository;
+  final String authorUid;
   final bool podePublicar;
   final bool mostrarAppBar;
   final String? saudacao;
-  final String autorNome;
-  final String autorCargo;
 
   @override
   State<MuralScreen> createState() => _MuralScreenState();
 }
 
 class _MuralScreenState extends State<MuralScreen> {
-  final MuralRepository _repository = MuralRepository();
-  late List<PostMural> _posts;
-  TipoPost? _filtro;
+  static const int _pageSize = 20;
+
+  final List<MuralPost> _posts = <MuralPost>[];
+  final Set<String> _expandedIds = <String>{};
+  final ScrollController _scrollController = ScrollController();
+
+  bool _loading = true;
+  bool _loadingMore = false;
+  bool _hasMore = true;
+  String? _error;
+  MuralPostKind? _filtro;
 
   @override
   void initState() {
     super.initState();
-    _posts = _repository.listar();
+    _scrollController.addListener(_onScroll);
+    _reload();
   }
 
-  List<PostMural> get _visiveis => _filtro == null
-      ? _posts
-      : _posts.where((p) => p.tipo == _filtro).toList();
-
-  Future<void> _atualizar() async {
-    await Future<void>.delayed(const Duration(milliseconds: 600));
-    if (!mounted) return;
-    setState(() => _posts = _repository.listar());
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
   }
 
-  Future<void> _novaPublicacao() async {
-    final novo = await Navigator.of(context).push<PostMural>(
-      MaterialPageRoute<PostMural>(
+  void _onScroll() {
+    if (!_hasMore || _loadingMore || _loading) return;
+    if (!_scrollController.hasClients) return;
+    final pos = _scrollController.position;
+    if (pos.pixels >= pos.maxScrollExtent - 240) {
+      _loadMore();
+    }
+  }
+
+  Future<void> _reload() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+      _hasMore = true;
+    });
+    try {
+      final page = widget.podePublicar
+          ? await _listForWriter(pageSize: _pageSize)
+          : await widget.repository.listVisiblePosts(pageSize: _pageSize);
+      if (!mounted) return;
+      setState(() {
+        _posts
+          ..clear()
+          ..addAll(page);
+        _hasMore = page.length >= _pageSize;
+        _loading = false;
+      });
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = '$error';
+      });
+    }
+  }
+
+  Future<List<MuralPost>> _listForWriter({
+    int pageSize = 20,
+    DateTime? startAfterEffectiveAt,
+    String? startAfterId,
+  }) async {
+    // Gestão vê agendados também; pagina no client como a lista visível.
+    final all =
+        await widget.repository.watchPosts(includeUnreleased: true).first;
+    Iterable<MuralPost> page = all;
+    if (startAfterEffectiveAt != null && startAfterId != null) {
+      page = all.where((post) {
+        final cmp = post.effectiveAt.compareTo(startAfterEffectiveAt);
+        if (cmp != 0) return cmp < 0;
+        return post.id.compareTo(startAfterId) < 0;
+      });
+    }
+    return page.take(pageSize).toList(growable: false);
+  }
+
+  Future<void> _loadMore() async {
+    if (_posts.isEmpty || _loadingMore || !_hasMore) return;
+    setState(() => _loadingMore = true);
+    final last = _posts.last;
+    try {
+      final next = widget.podePublicar
+          ? await _listForWriter(
+              pageSize: _pageSize,
+              startAfterEffectiveAt: last.effectiveAt,
+              startAfterId: last.id,
+            )
+          : await widget.repository.listVisiblePosts(
+              pageSize: _pageSize,
+              startAfterEffectiveAt: last.effectiveAt,
+              startAfterId: last.id,
+            );
+      if (!mounted) return;
+      setState(() {
+        _posts.addAll(next);
+        _hasMore = next.length >= _pageSize;
+        _loadingMore = false;
+      });
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() => _loadingMore = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Não foi possível carregar mais: $error')),
+      );
+    }
+  }
+
+  Future<void> _novaPublicacao({MuralPost? existing}) async {
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
         builder: (_) => MuralPostFormScreen(
-          autor: widget.autorNome,
-          cargo: widget.autorCargo,
+          repository: widget.repository,
+          authorUid: widget.authorUid,
+          existing: existing,
         ),
       ),
     );
-    if (novo == null) return;
-    await _repository.publicar(novo);
-    if (!mounted) return;
-    setState(() => _posts = _repository.listar());
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Publicado no mural (simulação — ainda não enviado às famílias).',
+    if (saved == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            existing == null
+                ? 'Publicação salva no mural.'
+                : 'Publicação atualizada.',
+          ),
         ),
-      ),
-    );
+      );
+      await _reload();
+    }
   }
 
-  Widget _chip(String label, TipoPost? tipo) {
+  List<MuralPost> get _visiveis {
+    if (_filtro == null) return _posts;
+    return _posts.where((p) => p.kind == _filtro).toList();
+  }
+
+  Widget _chip(String label, MuralPostKind? kind) {
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: ChoiceChip(
         label: Text(label),
-        selected: _filtro == tipo,
-        onSelected: (_) => setState(() => _filtro = tipo),
+        selected: _filtro == kind,
+        onSelected: (_) => setState(() => _filtro = kind),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final visiveis = _visiveis;
     final scheme = Theme.of(context).colorScheme;
+    final visiveis = _visiveis;
 
     return Scaffold(
       appBar: widget.mostrarAppBar ? AppBar(title: const Text('Mural')) : null,
       body: RefreshIndicator(
-        onRefresh: _atualizar,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
-          children: [
-            if (widget.saudacao != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(4, 4, 4, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.saudacao!,
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Novidades da creche para você e sua família.',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _chip('Tudo', null),
-                  for (final tipo in TipoPost.values) _chip(tipo.label, tipo),
+        onRefresh: _reload,
+        child: _loading
+            ? ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: const [
+                  SizedBox(height: 120),
+                  Center(child: CircularProgressIndicator()),
                 ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            if (visiveis.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 48),
-                child: Column(
-                  children: [
-                    Icon(Icons.dashboard_outlined,
-                        size: 56, color: scheme.outline),
-                    const SizedBox(height: 12),
-                    const Text('Nenhuma publicação por aqui ainda.'),
-                  ],
-                ),
               )
-            else
-              for (final post in visiveis)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _PostCard(
-                    key: ValueKey(post.id),
-                    post: post,
-                    mostrarVisualizacoes: widget.podePublicar,
+            : _error != null
+                ? ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(24),
+                    children: [
+                      Text('Não foi possível carregar o mural.\n$_error'),
+                      const SizedBox(height: 12),
+                      FilledButton(
+                        onPressed: _reload,
+                        child: const Text('Tentar de novo'),
+                      ),
+                    ],
+                  )
+                : ListView.builder(
+                    controller: _scrollController,
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
+                    itemCount: visiveis.length + 2 + (_loadingMore ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (widget.saudacao != null)
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(4, 4, 4, 12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      widget.saudacao!,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .headlineSmall,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Novidades da creche para você e sua família.',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            color: scheme.onSurfaceVariant,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                children: [
+                                  _chip('Tudo', null),
+                                  for (final kind in MuralPostKind.values)
+                                    _chip(kind.label, kind),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+                        );
+                      }
+
+                      final postIndex = index - 1;
+                      if (visiveis.isEmpty && postIndex == 0) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 48),
+                          child: Column(
+                            children: [
+                              Icon(Icons.dashboard_outlined,
+                                  size: 56, color: scheme.outline),
+                              const SizedBox(height: 12),
+                              const Text('Nenhuma publicação por aqui ainda.'),
+                            ],
+                          ),
+                        );
+                      }
+
+                      if (postIndex >= visiveis.length) {
+                        if (_loadingMore) {
+                          return const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            child: Center(child: CircularProgressIndicator()),
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      }
+
+                      final post = visiveis[postIndex];
+                      final expanded = _expandedIds.contains(post.id);
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _MuralPostTile(
+                          key: ValueKey(post.id),
+                          post: post,
+                          expanded: expanded,
+                          showUnreleasedBadge: widget.podePublicar &&
+                              !post.isReleased(),
+                          onToggle: () => setState(() {
+                            if (expanded) {
+                              _expandedIds.remove(post.id);
+                            } else {
+                              _expandedIds.add(post.id);
+                            }
+                          }),
+                          onEdit: widget.podePublicar
+                              ? () => _novaPublicacao(existing: post)
+                              : null,
+                        ),
+                      );
+                    },
                   ),
-                ),
-          ],
-        ),
       ),
       floatingActionButton: widget.podePublicar
           ? FloatingActionButton.extended(
-              onPressed: _novaPublicacao,
-              icon: const Icon(Icons.add_a_photo_outlined),
+              onPressed: () => _novaPublicacao(),
+              icon: const Icon(Icons.post_add_outlined),
               label: const Text('Nova publicação'),
             )
           : null,
@@ -160,326 +320,140 @@ class _MuralScreenState extends State<MuralScreen> {
   }
 }
 
-class _PostCard extends StatefulWidget {
-  const _PostCard({
+class _MuralPostTile extends StatelessWidget {
+  const _MuralPostTile({
     super.key,
     required this.post,
-    required this.mostrarVisualizacoes,
+    required this.expanded,
+    required this.onToggle,
+    this.onEdit,
+    this.showUnreleasedBadge = false,
   });
 
-  final PostMural post;
-  final bool mostrarVisualizacoes;
-
-  @override
-  State<_PostCard> createState() => _PostCardState();
-}
-
-class _PostCardState extends State<_PostCard> {
-  bool _curtido = false;
-  bool _ciente = false;
+  final MuralPost post;
+  final bool expanded;
+  final VoidCallback onToggle;
+  final VoidCallback? onEdit;
+  final bool showUnreleasedBadge;
 
   @override
   Widget build(BuildContext context) {
-    final post = widget.post;
     final scheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
     return Card(
       margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (post.fixado)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
-                    Icon(Icons.push_pin, size: 16, color: scheme.primary),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Fixado',
-                      style: textTheme.labelMedium
-                          ?.copyWith(color: scheme.primary),
-                    ),
-                  ],
-                ),
-              ),
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: scheme.primaryContainer,
-                  child: Text(
-                    iniciaisDe(post.autor),
-                    style: TextStyle(
-                      color: scheme.onPrimaryContainer,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onToggle,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(post.kind.icon, size: 18, color: scheme.primary),
+                  const SizedBox(width: 6),
+                  Text(
+                    post.kind.label,
+                    style: textTheme.labelMedium?.copyWith(
+                      color: scheme.primary,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
+                  const Spacer(),
+                  Text(
+                    formatMuralDate(post.effectiveAt),
+                    style: textTheme.bodySmall
+                        ?.copyWith(color: scheme.onSurfaceVariant),
+                  ),
+                  Icon(
+                    expanded
+                        ? Icons.expand_less
+                        : Icons.expand_more,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ],
+              ),
+              if (showUnreleasedBadge) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Agendado · libera em ${formatMuralDateTime(post.releasedAt)}',
+                  style: textTheme.labelSmall?.copyWith(
+                    color: scheme.tertiary,
+                  ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
+              ],
+              const SizedBox(height: 8),
+              Text(
+                post.title,
+                style: textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              if (!expanded) ...[
+                const SizedBox(height: 4),
+                Text(
+                  post.body,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.bodyMedium
+                      ?.copyWith(color: scheme.onSurfaceVariant),
+                ),
+              ] else ...[
+                const SizedBox(height: 8),
+                Text(post.body),
+                if (post.location != null && post.location!.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        post.autor,
-                        style: textTheme.titleSmall
-                            ?.copyWith(fontWeight: FontWeight.w600),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        '${post.cargo} · ${post.quando}',
-                        style: textTheme.bodySmall
-                            ?.copyWith(color: scheme.onSurfaceVariant),
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      Icon(Icons.place_outlined,
+                          size: 16, color: scheme.onSurfaceVariant),
+                      const SizedBox(width: 6),
+                      Expanded(child: Text(post.location!)),
                     ],
                   ),
-                ),
-                _TipoChip(tipo: post.tipo),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              post.titulo,
-              style:
-                  textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Icon(Icons.groups_outlined,
-                    size: 14, color: scheme.onSurfaceVariant),
-                const SizedBox(width: 4),
+                ],
+                if (post.scheduleText != null &&
+                    post.scheduleText!.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.schedule_outlined,
+                          size: 16, color: scheme.onSurfaceVariant),
+                      const SizedBox(width: 6),
+                      Expanded(child: Text(post.scheduleText!)),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 12),
                 Text(
-                  post.turma,
+                  'Liberação: ${formatMuralDateTime(post.releasedAt)}',
                   style: textTheme.bodySmall
                       ?.copyWith(color: scheme.onSurfaceVariant),
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(post.texto),
-            if (post.fotos.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              _FotosGrid(
-                fotos: post.fotos,
-                onTap: (index) => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) =>
-                        _FotoViewer(fotos: post.fotos, inicial: index),
-                  ),
+                Text(
+                  'Efetividade: ${formatMuralDateTime(post.effectiveAt)}',
+                  style: textTheme.bodySmall
+                      ?.copyWith(color: scheme.onSurfaceVariant),
                 ),
-              ),
+                if (onEdit != null) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: onEdit,
+                      icon: const Icon(Icons.edit_outlined),
+                      label: const Text('Editar'),
+                    ),
+                  ),
+                ],
+              ],
             ],
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                TextButton.icon(
-                  onPressed: () => setState(() => _curtido = !_curtido),
-                  icon: Icon(
-                    _curtido ? Icons.favorite : Icons.favorite_border,
-                    color: _curtido ? Colors.red.shade400 : null,
-                  ),
-                  label: Text('${post.curtidas + (_curtido ? 1 : 0)}'),
-                ),
-                const Spacer(),
-                if (widget.mostrarVisualizacoes)
-                  Row(
-                    children: [
-                      Icon(Icons.visibility_outlined,
-                          size: 16, color: scheme.onSurfaceVariant),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Visto por ${post.visualizacoes} famílias',
-                        style: textTheme.bodySmall
-                            ?.copyWith(color: scheme.onSurfaceVariant),
-                      ),
-                    ],
-                  )
-                else if (post.tipo != TipoPost.foto)
-                  FilledButton.tonalIcon(
-                    onPressed: () => setState(() => _ciente = !_ciente),
-                    icon: Icon(_ciente
-                        ? Icons.check_circle
-                        : Icons.check_circle_outline),
-                    label: Text(_ciente ? 'Ciente' : 'Marcar ciente'),
-                  ),
-              ],
-            ),
-          ],
+          ),
         ),
-      ),
-    );
-  }
-}
-
-class _TipoChip extends StatelessWidget {
-  const _TipoChip({required this.tipo});
-
-  final TipoPost tipo;
-
-  @override
-  Widget build(BuildContext context) {
-    final cor = tipo.cor;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: cor.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(tipo.icone, size: 14, color: cor),
-          const SizedBox(width: 4),
-          Text(
-            tipo.label,
-            style: TextStyle(
-              color: cor,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FotosGrid extends StatelessWidget {
-  const _FotosGrid({required this.fotos, required this.onTap});
-
-  final List<FotoMural> fotos;
-  final void Function(int index) onTap;
-
-  Widget _tile(int i, {String? sobreposicao}) {
-    return GestureDetector(
-      onTap: () => onTap(i),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            FotoPlaceholder(foto: fotos[i]),
-            if (sobreposicao != null)
-              Container(
-                color: Colors.black54,
-                alignment: Alignment.center,
-                child: Text(
-                  sobreposicao,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final n = fotos.length;
-    const gap = SizedBox(width: 4, height: 4);
-
-    return AspectRatio(
-      aspectRatio: 16 / 10,
-      child: n == 1
-          ? _tile(0)
-          : Row(
-              children: [
-                Expanded(child: _tile(0)),
-                gap,
-                Expanded(
-                  child: n == 2
-                      ? _tile(1)
-                      : Column(
-                          children: [
-                            Expanded(child: _tile(1)),
-                            gap,
-                            Expanded(
-                              child: _tile(
-                                2,
-                                sobreposicao: n > 3 ? '+${n - 3}' : null,
-                              ),
-                            ),
-                          ],
-                        ),
-                ),
-              ],
-            ),
-    );
-  }
-}
-
-class _FotoViewer extends StatefulWidget {
-  const _FotoViewer({required this.fotos, required this.inicial});
-
-  final List<FotoMural> fotos;
-  final int inicial;
-
-  @override
-  State<_FotoViewer> createState() => _FotoViewerState();
-}
-
-class _FotoViewerState extends State<_FotoViewer> {
-  late final PageController _controller;
-  late int _atual;
-
-  @override
-  void initState() {
-    super.initState();
-    _atual = widget.inicial;
-    _controller = PageController(initialPage: widget.inicial);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        title: Text('${_atual + 1} / ${widget.fotos.length}'),
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: PageView.builder(
-              controller: _controller,
-              itemCount: widget.fotos.length,
-              onPageChanged: (i) => setState(() => _atual = i),
-              itemBuilder: (context, i) => Center(
-                child: AspectRatio(
-                  aspectRatio: 1,
-                  child: FotoPlaceholder(foto: widget.fotos[i], iconSize: 96),
-                ),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-            child: Text(
-              widget.fotos[_atual].legenda,
-              style: const TextStyle(color: Colors.white, fontSize: 16),
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ],
       ),
     );
   }
